@@ -164,7 +164,11 @@ function App() {
       <div className="app">
         <header className="app-header">
           <div className="brand-row">
+<<<<<<< HEAD
             <img src="/logo.png" alt="Anupama Canteen logo" className="brand-logo" />
+=======
+            <img src="/logo.svg" alt="Anupama Canteen logo" className="brand-logo" />
+>>>>>>> c6b6646c333c4c325742bd460b7c599e633ff981
             <h1>Anupama Canteen</h1>
           </div>
         </header>
@@ -181,7 +185,11 @@ function App() {
     <div className="app">
       <header className="app-header">
         <div className="brand-row">
+<<<<<<< HEAD
           <img src="/logo.png" alt="Anupama Canteen logo" className="brand-logo" />
+=======
+          <img src="/logo.svg" alt="Anupama Canteen logo" className="brand-logo" />
+>>>>>>> c6b6646c333c4c325742bd460b7c599e633ff981
           <div>
             <h1>Anupama Canteen</h1>
             <p>Quick snack ordering with instant checkout</p>
