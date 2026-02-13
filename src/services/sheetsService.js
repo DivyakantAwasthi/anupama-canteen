@@ -5,13 +5,13 @@ const STABLE_MENU_IMAGE_BY_NAME = {
   "vada pav":
     "https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=800&q=80",
   "cheese vada pav":
-    "/images/cheese-vada-pav.jpg",
+    "https://raw.githubusercontent.com/DivyakantAwasthi/anupama-canteen/main/public/images/cheese-vada-pav.jpg",
   "club sandwich":
     "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?auto=format&fit=crop&w=800&q=80",
   "cheese sandwich":
     "https://images.unsplash.com/photo-1481070555726-e2fe8357725c?auto=format&fit=crop&w=800&q=80",
   "grilled sandwich":
-    "/images/grilled-sandwich.jpg",
+    "https://raw.githubusercontent.com/DivyakantAwasthi/anupama-canteen/main/public/images/grilled-sandwich.jpg",
   "idli sambhar":
     "https://images.unsplash.com/photo-1668236543090-82eba5ee5976?auto=format&fit=crop&w=800&q=80",
   "2 idli sambhar":
