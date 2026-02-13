@@ -117,42 +117,60 @@ function App() {
       return;
     }
 
-    setIsSavingOrder(true);
+    // create a pending order and show QR for payment
+    setIsSavingOrder(false);
     setCheckoutError("");
 
     const orderId = Date.now();
     const items = cartItems.map((item) => item.name).join(", ");
+
+    setOrderDetails({
+      orderId,
+      total: totalPrice,
+      customer: {
+        name: customer.name.trim(),
+        email: customer.email.trim(),
+        phone: customer.phone.trim(),
+      },
+      items,
+      paid: false,
+      saving: false,
+      error: null,
+    });
+
+    // clear cart and close modal while awaiting payment
+    setCartItems([]);
+    setIsCheckoutModalOpen(false);
+  };
+
+  const confirmPayment = async () => {
+    if (!orderDetails) return;
+
+    // mark saving on the order details
+    setOrderDetails((prev) => ({ ...prev, saving: true, error: null }));
+
     const timestamp = new Date().toISOString();
 
     try {
       await appendOrderToSheet({
-        orderId,
-        customerName: customer.name.trim(),
-        customerEmail: customer.email.trim(),
-        customerPhone: customer.phone.trim(),
-        items,
-        total: totalPrice,
+        orderId: orderDetails.orderId,
+        customerName: orderDetails.customer.name,
+        customerEmail: orderDetails.customer.email,
+        customerPhone: orderDetails.customer.phone,
+        items: orderDetails.items,
+        total: orderDetails.total,
         timestamp,
       });
 
-      setOrderDetails({
-        orderId,
-        total: totalPrice,
-      });
-      setCartItems([]);
-      setCustomer({
-        name: "",
-        email: "",
-        phone: "",
-      });
-      setIsCheckoutModalOpen(false);
+      setOrderDetails((prev) => ({ ...prev, paid: true, saving: false }));
     } catch (error) {
-      setCheckoutError(
-        error?.message ||
-          "Unable to save order. Check your API configuration and try again."
-      );
-    } finally {
-      setIsSavingOrder(false);
+      setOrderDetails((prev) => ({
+        ...prev,
+        saving: false,
+        error:
+          error?.message ||
+          "Unable to confirm payment. Check your connection and try again.",
+      }));
     }
   };
 
@@ -171,8 +189,8 @@ function App() {
           </div>
         </header>
         <Confirmation
-          orderId={orderDetails.orderId}
-          total={orderDetails.total}
+          order={orderDetails}
+          onConfirmPayment={confirmPayment}
           onNewOrder={startNewOrder}
         />
       </div>

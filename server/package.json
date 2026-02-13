@@ -1,0 +1,14 @@
+{
+  "name": "anupama-canteen-webhook",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "node-fetch": "^3.4.1",
+    "dotenv": "^16.0.3"
+  }
+}

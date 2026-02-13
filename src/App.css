@@ -1,6 +1,6 @@
 :root {
-  --bg: #f3f4f6;
-  --panel: #f7fff4; /* pastel mint */
+  --bg: #e6f8ef;
+  --panel: rgba(255,255,255,0.9); /* translucent panel so dark-green background shows through */
   --text: #1f2937;
   --muted: #6b7280;
   --line: #e5e7eb;
@@ -24,7 +24,8 @@ body, input, button, select {
 
 .app {
   min-height: 100vh;
-  background: linear-gradient(180deg, #fbfefc 0%, var(--bg) 40%);
+  /* let the `body` gradient show across the whole page */
+  background: transparent;
   color: var(--text);
   padding: 36px 20px 48px;
 }
