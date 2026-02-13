@@ -1,11 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Anupama Canteen logo">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#059669"/>
-      <stop offset="100%" stop-color="#065f46"/>
-    </linearGradient>
-  </defs>
-  <rect x="12" y="12" width="232" height="232" rx="52" fill="url(#g)"/>
-  <path d="M76 92h80a36 36 0 0 1 0 72H92v16h84a12 12 0 0 1 0 24H84a16 16 0 0 1-16-16v-24a24 24 0 0 1 24-24h64a12 12 0 0 0 0-24H76a12 12 0 0 1 0-24Z" fill="#fff"/>
-  <rect x="176" y="70" width="12" height="138" rx="6" fill="#fff"/>
+<!-- Wrapper SVG that displays the uploaded raster logo (logo.png).
+     This keeps the app using /logo.svg while serving the new `logo.png`. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Anupama Canteen logo">
+  <image href="/logo.png" x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid meet"/>
 </svg>
