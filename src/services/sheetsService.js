@@ -11,7 +11,7 @@ const STABLE_MENU_IMAGE_BY_NAME = {
   "cheese sandwich":
     "https://images.unsplash.com/photo-1481070555726-e2fe8357725c?auto=format&fit=crop&w=800&q=80",
   "grilled sandwich":
-    "https://images.unsplash.com/photo-1567234669003-dce7a7a88821?auto=format&fit=crop&w=800&q=80",
+    "/images/grilled-sandwich.jpg",
   "idli sambhar":
     "https://images.unsplash.com/photo-1668236543090-82eba5ee5976?auto=format&fit=crop&w=800&q=80",
   "2 idli sambhar":
