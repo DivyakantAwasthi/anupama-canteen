@@ -10,8 +10,10 @@ function Cart({ items, total, onRemove, onCheckout, isSavingOrder, error }) {
           {items.map((item, index) => (
             <li key={`${item.id}-${index}`} className="cart-item">
               <div>
-                <span>{item.name}</span>
-                <small>Rs. {item.price}</small>
+                <span>{item.name} {item.quantity ? `× ${item.quantity}` : null}</span>
+                <small>
+                  {item.unitPrice ? `Rs. ${item.unitPrice} each — ` : ''}Rs. {item.price}
+                </small>
               </div>
               <button
                 type="button"

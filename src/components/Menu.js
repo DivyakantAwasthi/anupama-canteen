@@ -1,6 +1,9 @@
+import { useState } from "react";
+
 const FALLBACK_IMAGE = "/menu-placeholder.svg";
 
 function Menu({ snacks, onAddToCart, isLoading, error, onRetry }) {
+  const [quantities, setQuantities] = useState({});
   if (isLoading) {
     return (
       <section className="panel">
@@ -50,7 +53,36 @@ function Menu({ snacks, onAddToCart, isLoading, error, onRetry }) {
             <div className="menu-card-body">
               <h3>{snack.name}</h3>
               <p>Rs. {snack.price}</p>
-              <button onClick={() => onAddToCart(snack)}>Add to Cart</button>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <label style={{ fontSize: "0.9rem" }}>
+                  Qty:
+                  <select
+                    value={quantities[snack.id] || 1}
+                    onChange={(e) =>
+                      setQuantities((prev) => ({ ...prev, [snack.id]: Number(e.target.value) }))
+                    }
+                    style={{ marginLeft: 6 }}
+                  >
+                    <option value={1}>1</option>
+                    <option value={2}>2</option>
+                    <option value={3}>3</option>
+                    <option value={4}>4</option>
+                  </select>
+                </label>
+                <button
+                  onClick={() => {
+                    const qty = quantities[snack.id] || 1;
+                    onAddToCart({
+                      ...snack,
+                      quantity: qty,
+                      unitPrice: snack.price,
+                      price: Number(snack.price) * qty,
+                    });
+                  }}
+                >
+                  Add to Cart
+                </button>
+              </div>
             </div>
           </article>
         ))}
