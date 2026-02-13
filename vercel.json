@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "package.json", "use": "@vercel/static-build", "config": { "distDir": "build" } },
+    { "src": "api/**/*.js", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/payment-confirmed", "dest": "/api/payment-confirmed.js", "methods": ["POST"] },
+    { "src": "/(.*)", "dest": "/$1" }
+  ]
+}
