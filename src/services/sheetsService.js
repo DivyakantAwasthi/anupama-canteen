@@ -5,7 +5,7 @@ const STABLE_MENU_IMAGE_BY_NAME = {
   "vada pav":
     "https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=800&q=80",
   "cheese vada pav":
-    "https://images.unsplash.com/photo-1601050690117-8b9f0f3b7d2b?auto=format&fit=crop&w=800&q=80",
+    "/images/cheese-vada-pav.jpg",
   "club sandwich":
     "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?auto=format&fit=crop&w=800&q=80",
   "cheese sandwich":
