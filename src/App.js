@@ -105,10 +105,12 @@ function App() {
       return;
     }
 
-    if (!isValidEmail(customer.email.trim())) {
+    const emailTrim = customer.email.trim();
+    if (emailTrim && !isValidEmail(emailTrim)) {
       setCheckoutError("Please enter a valid email address.");
       return;
     }
+
 
     if (!isValidPhone(customer.phone.trim())) {
       setCheckoutError("Please enter a 10-digit phone number.");
@@ -225,7 +227,7 @@ function App() {
                 required
               />
 
-              <label htmlFor="email">Email</label>
+              <label htmlFor="email">Email (optional)</label>
               <input
                 id="email"
                 name="email"
@@ -233,7 +235,6 @@ function App() {
                 value={customer.email}
                 onChange={onCustomerFieldChange}
                 placeholder="Enter your email"
-                required
               />
 
               <label htmlFor="phone">Phone Number</label>
