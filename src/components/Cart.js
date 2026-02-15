@@ -7,18 +7,18 @@ function Cart({ items, total, onRemove, onCheckout, isSavingOrder, error }) {
         <p className="muted-text">No items selected yet.</p>
       ) : (
         <ul className="cart-list">
-          {items.map((item, index) => (
-            <li key={`${item.id}-${index}`} className="cart-item">
+          {items.map((item) => (
+            <li key={item.id} className="cart-item">
               <div>
-                <span>{item.name} {item.quantity ? `× ${item.quantity}` : null}</span>
+                <span>{item.name} x {item.quantity}</span>
                 <small>
-                  {item.unitPrice ? `Rs. ${item.unitPrice} each — ` : ''}Rs. {item.price}
+                  Rs. {item.price} each, subtotal Rs. {(item.price * item.quantity).toFixed(2)}
                 </small>
               </div>
               <button
                 type="button"
                 className="remove-btn"
-                onClick={() => onRemove(index)}
+                onClick={() => onRemove(item.id)}
               >
                 Remove
               </button>

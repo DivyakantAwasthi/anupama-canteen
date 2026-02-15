@@ -2,7 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Menu from "./components/Menu";
 import Cart from "./components/Cart";
 import Confirmation from "./components/Confirmation";
-import { appendOrderToSheet, fetchActiveMenuItems } from "./services/sheetsService";
+import {
+  appendOrderToSheet,
+  fetchActiveMenuItems,
+  sendOrderNotification,
+} from "./services/sheetsService";
 import "./App.css";
 
 function App() {
@@ -22,9 +26,20 @@ function App() {
   const MENU_REFRESH_INTERVAL_MS = 30000;
 
   const totalPrice = useMemo(
-    () => cartItems.reduce((sum, item) => sum + item.price, 0),
+    () =>
+      cartItems.reduce(
+        (sum, item) => sum + Number(item.price) * Number(item.quantity || 0),
+        0
+      ),
     [cartItems]
   );
+
+  const quantityById = useMemo(() => {
+    return cartItems.reduce((acc, item) => {
+      acc[item.id] = item.quantity;
+      return acc;
+    }, {});
+  }, [cartItems]);
 
   const loadMenu = useCallback(async (options = {}) => {
     const { silent = false } = options;
@@ -62,11 +77,34 @@ function App() {
   }, [loadMenu]);
 
   const addToCart = (item) => {
-    setCartItems((prev) => [...prev, item]);
+    setCartItems((prev) => {
+      const existingItem = prev.find((cartItem) => cartItem.id === item.id);
+      if (existingItem) {
+        return prev.map((cartItem) =>
+          cartItem.id === item.id
+            ? { ...cartItem, quantity: cartItem.quantity + 1 }
+            : cartItem
+        );
+      }
+
+      return [...prev, { ...item, quantity: 1 }];
+    });
   };
 
-  const removeFromCart = (indexToRemove) => {
-    setCartItems((prev) => prev.filter((_, index) => index !== indexToRemove));
+  const decreaseCartItemQuantity = (itemId) => {
+    setCartItems((prev) =>
+      prev
+        .map((cartItem) =>
+          cartItem.id === itemId
+            ? { ...cartItem, quantity: cartItem.quantity - 1 }
+            : cartItem
+        )
+        .filter((cartItem) => cartItem.quantity > 0)
+    );
+  };
+
+  const removeFromCart = (itemId) => {
+    setCartItems((prev) => prev.filter((item) => item.id !== itemId));
   };
 
   const openCheckoutModal = () => {
@@ -111,18 +149,18 @@ function App() {
       return;
     }
 
-
     if (!isValidPhone(customer.phone.trim())) {
       setCheckoutError("Please enter a 10-digit phone number.");
       return;
     }
 
-    // create a pending order and show QR for payment
     setIsSavingOrder(false);
     setCheckoutError("");
 
     const orderId = Date.now();
-    const items = cartItems.map((item) => item.name).join(", ");
+    const items = cartItems
+      .map((item) => `${item.name} x ${item.quantity}`)
+      .join(", ");
 
     setOrderDetails({
       orderId,
@@ -136,9 +174,9 @@ function App() {
       paid: false,
       saving: false,
       error: null,
+      notificationError: null,
     });
 
-    // clear cart and close modal while awaiting payment
     setCartItems([]);
     setIsCheckoutModalOpen(false);
   };
@@ -146,8 +184,12 @@ function App() {
   const confirmPayment = async () => {
     if (!orderDetails) return;
 
-    // mark saving on the order details
-    setOrderDetails((prev) => ({ ...prev, saving: true, error: null }));
+    setOrderDetails((prev) => ({
+      ...prev,
+      saving: true,
+      error: null,
+      notificationError: null,
+    }));
 
     const timestamp = new Date().toISOString();
 
@@ -162,7 +204,29 @@ function App() {
         timestamp,
       });
 
-      setOrderDetails((prev) => ({ ...prev, paid: true, saving: false }));
+      let notificationError = null;
+      try {
+        await sendOrderNotification({
+          orderId: orderDetails.orderId,
+          customerName: orderDetails.customer.name,
+          customerEmail: orderDetails.customer.email,
+          customerPhone: orderDetails.customer.phone,
+          items: orderDetails.items,
+          total: orderDetails.total,
+          timestamp,
+        });
+      } catch (notifyError) {
+        notificationError =
+          notifyError?.message ||
+          "Order saved, but notification could not be sent.";
+      }
+
+      setOrderDetails((prev) => ({
+        ...prev,
+        paid: true,
+        saving: false,
+        notificationError,
+      }));
     } catch (error) {
       setOrderDetails((prev) => ({
         ...prev,
@@ -211,7 +275,9 @@ function App() {
       <main className="main-layout">
         <Menu
           snacks={menuItems}
+          quantities={quantityById}
           onAddToCart={addToCart}
+          onDecreaseQuantity={decreaseCartItemQuantity}
           isLoading={isMenuLoading}
           error={menuError}
           onRetry={() => loadMenu()}

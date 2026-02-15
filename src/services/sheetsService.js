@@ -1,5 +1,9 @@
 const ORDERS_API_URL = process.env.REACT_APP_ORDERS_API_URL;
 const MENU_API_URL = process.env.REACT_APP_MENU_API_URL || ORDERS_API_URL;
+const NOTIFY_API_URL = process.env.REACT_APP_NOTIFY_API_URL || ORDERS_API_URL;
+const ADMIN_EMAIL = process.env.REACT_APP_ADMIN_EMAIL || "";
+const ADMIN_PHONE = process.env.REACT_APP_ADMIN_PHONE || "";
+
 const DEFAULT_MENU_IMAGE = "/menu-placeholder.svg";
 const STABLE_MENU_IMAGE_BY_NAME = {
   "vada pav":
@@ -88,7 +92,6 @@ const normalizeImageUrl = (value, name) => {
       return stableImageForName(name);
     }
 
-    // source.unsplash.com can be flaky/hotlink-unfriendly; use stable direct URL.
     if (parsed.hostname === "source.unsplash.com") {
       return stableImageForName(name);
     }
@@ -128,6 +131,25 @@ function normalizeMenuRow(rawRow, index) {
     image: normalizeImageUrl(image, name),
     active,
   };
+}
+
+async function postFormNoCors(url, payload) {
+  if (!hasConfiguredValue(url)) {
+    throw new Error("Set API URL in .env");
+  }
+
+  const form = new URLSearchParams(payload);
+
+  await fetch(url, {
+    method: "POST",
+    mode: "no-cors",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+    },
+    body: form.toString(),
+  });
+
+  return { ok: true };
 }
 
 export async function fetchActiveMenuItems() {
@@ -172,7 +194,7 @@ export async function appendOrderToSheet({
     throw new Error("Set REACT_APP_ORDERS_API_URL in .env");
   }
 
-  const payload = new URLSearchParams({
+  return postFormNoCors(ORDERS_API_URL, {
     orderId: String(orderId),
     customerName,
     customerEmail,
@@ -181,17 +203,31 @@ export async function appendOrderToSheet({
     total: total.toFixed(2),
     timestamp,
   });
+}
 
-  // Apps Script web apps often do not return CORS headers.
-  // `no-cors` allows submit from browser, but response is opaque.
-  await fetch(ORDERS_API_URL, {
-    method: "POST",
-    mode: "no-cors",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-    },
-    body: payload.toString(),
+export async function sendOrderNotification({
+  orderId,
+  customerName,
+  customerEmail,
+  customerPhone,
+  items,
+  total,
+  timestamp,
+}) {
+  if (!hasConfiguredValue(NOTIFY_API_URL)) {
+    throw new Error("Set REACT_APP_NOTIFY_API_URL or REACT_APP_ORDERS_API_URL in .env");
+  }
+
+  return postFormNoCors(NOTIFY_API_URL, {
+    action: "notify",
+    orderId: String(orderId),
+    customerName,
+    customerEmail,
+    customerPhone,
+    adminEmail: ADMIN_EMAIL,
+    adminPhone: ADMIN_PHONE,
+    items,
+    total: total.toFixed(2),
+    timestamp,
   });
-
-  return { ok: true };
 }
