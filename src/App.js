@@ -9,6 +9,26 @@ import {
 } from "./services/sheetsService";
 import "./App.css";
 
+const DECOR_BRANDS = [
+  { name: "Maggi", logo: "/brands/maggi.svg" },
+  { name: "Amul", logo: "/brands/amul.png" },
+  { name: "Veeba", logo: "/brands/veeba.png" },
+  { name: "MDH", logo: "/brands/mdh.svg" },
+  { name: "Everest", logo: "/brands/everest.png" },
+  { name: "Kissan", logo: "/brands/kissan.png" },
+  { name: "Knorr", logo: "/brands/knorr.png" },
+  { name: "Ching's", logo: "/brands/chings.svg" },
+  { name: "MTR", logo: "/brands/mtr.png" },
+  { name: "Nestle", logo: "/brands/nestle.png" },
+];
+
+const FOOD_QUOTES = [
+  "Good food is the shortcut to a better day.",
+  "A hot snack and chai can fix most things.",
+  "Fresh flavors, quick bites, zero fuss.",
+  "Happiness is best served with extra chutney.",
+];
+
 function App() {
   const [menuItems, setMenuItems] = useState([]);
   const [isMenuLoading, setIsMenuLoading] = useState(true);
@@ -24,6 +44,7 @@ function App() {
     phone: "",
   });
   const MENU_REFRESH_INTERVAL_MS = 30000;
+  const [activeQuoteIndex, setActiveQuoteIndex] = useState(0);
 
   const totalPrice = useMemo(
     () =>
@@ -55,8 +76,7 @@ function App() {
     } catch (error) {
       if (!silent) {
         setMenuError(
-          error?.message ||
-            "Unable to load menu right now. Please try again."
+          error?.message || "Unable to load menu right now. Please try again."
         );
       }
     } finally {
@@ -75,6 +95,18 @@ function App() {
 
     return () => clearInterval(intervalId);
   }, [loadMenu]);
+
+  useEffect(() => {
+    if (FOOD_QUOTES.length <= 1) {
+      return undefined;
+    }
+
+    const quoteIntervalId = setInterval(() => {
+      setActiveQuoteIndex((prev) => (prev + 1) % FOOD_QUOTES.length);
+    }, 3500);
+
+    return () => clearInterval(quoteIntervalId);
+  }, []);
 
   const addToCart = (item) => {
     setCartItems((prev) => {
@@ -272,6 +304,22 @@ function App() {
           </div>
         </div>
       </header>
+
+      <div className="brand-float brand-float-left" aria-hidden="true">
+        {DECOR_BRANDS.slice(0, 5).map((brand) => (
+          <div className="brand-float-item" key={`${brand.name}-left`}>
+            <img src={brand.logo} alt="" loading="lazy" />
+          </div>
+        ))}
+      </div>
+      <div className="brand-float brand-float-right" aria-hidden="true">
+        {DECOR_BRANDS.slice(5).map((brand) => (
+          <div className="brand-float-item" key={`${brand.name}-right`}>
+            <img src={brand.logo} alt="" loading="lazy" />
+          </div>
+        ))}
+      </div>
+
       <main className="main-layout">
         <Menu
           snacks={menuItems}
@@ -282,23 +330,45 @@ function App() {
           error={menuError}
           onRetry={() => loadMenu()}
         />
-        <Cart
-          items={cartItems}
-          total={totalPrice}
-          onRemove={removeFromCart}
-          onCheckout={openCheckoutModal}
-          isSavingOrder={isSavingOrder}
-          error={checkoutError}
-        />
+
+        <div className="right-column">
+          <Cart
+            items={cartItems}
+            total={totalPrice}
+            onRemove={removeFromCart}
+            onCheckout={openCheckoutModal}
+            isSavingOrder={isSavingOrder}
+            error={checkoutError}
+          />
+
+          <section className="panel quote-panel" aria-label="Canteen quotes">
+            <p className="quote-kicker">Canteen Quotes</p>
+            <div className="quote-stage">
+              <blockquote className="quote-card quote-card-animated" key={activeQuoteIndex}>
+                <span className="quote-mark" aria-hidden="true">
+                  "
+                </span>
+                <p>{FOOD_QUOTES[activeQuoteIndex]}</p>
+              </blockquote>
+            </div>
+            <div className="quote-dots" aria-hidden="true">
+              {FOOD_QUOTES.map((_, index) => (
+                <span
+                  className={`quote-dot ${index === activeQuoteIndex ? "is-active" : ""}`}
+                  key={`quote-dot-${index}`}
+                />
+              ))}
+            </div>
+            <p className="quote-footer">Serve hot. Eat happy.</p>
+          </section>
+        </div>
       </main>
 
       {isCheckoutModalOpen ? (
         <div className="modal-overlay" role="dialog" aria-modal="true">
           <div className="modal-card">
             <h2>Customer Details</h2>
-            <p className="muted-text">
-              Enter your details to place the order.
-            </p>
+            <p className="muted-text">Enter your details to place the order.</p>
             <form onSubmit={checkout} className="checkout-form">
               <label htmlFor="name">Name</label>
               <input
