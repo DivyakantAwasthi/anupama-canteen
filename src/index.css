@@ -1,0 +1,22 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap");
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+html {
+  background:
+    radial-gradient(circle at 12% 10%, rgba(45, 163, 95, 0.22), transparent 40%),
+    radial-gradient(circle at 88% 90%, rgba(28, 116, 64, 0.15), transparent 45%),
+    linear-gradient(180deg, #eef4ee 0%, #e7f1e8 42%, #ecf5ec 100%);
+}
+
+body {
+  font-family: "Manrope", "Segoe UI", sans-serif;
+  color: #17221b;
+  line-height: 1.4;
+  scroll-behavior: smooth;
+}

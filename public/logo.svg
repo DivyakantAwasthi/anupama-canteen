@@ -1,0 +1,5 @@
+<!-- Wrapper SVG that displays the uploaded raster logo (logo.png).
+     This keeps the app using /logo.svg while serving the new `logo.png`. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Anupama Canteen logo">
+  <image href="/logo.png" x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid meet"/>
+</svg>
