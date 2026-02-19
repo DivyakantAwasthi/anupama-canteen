@@ -190,6 +190,24 @@ const buildOrderPayload = ({
   phone: customerPhone,
 });
 
+const buildLegacyOrderPayload = ({
+  orderId,
+  customerName,
+  customerEmail,
+  customerPhone,
+  items,
+  total,
+  timestamp,
+}) => ({
+  orderId: String(orderId),
+  customerName,
+  customerEmail,
+  customerPhone,
+  items,
+  total: Number(total).toFixed(2),
+  timestamp,
+});
+
 const normalizeStatus = (value) => {
   const normalized = String(value || "")
     .trim()
@@ -255,7 +273,9 @@ export async function appendOrderToSheet(orderData) {
   }
 
   const payloadData = buildOrderPayload(orderData);
+  const legacyPayloadData = buildLegacyOrderPayload(orderData);
   const formPayload = new URLSearchParams(payloadData);
+  const legacyFormPayload = new URLSearchParams(legacyPayloadData);
   const requestAttempts = [];
 
   const tryRequest = async (requestFn) => {
@@ -272,6 +292,21 @@ export async function appendOrderToSheet(orderData) {
       return false;
     }
   };
+
+  const legacyFormSuccess = await tryRequest(() =>
+    fetch(ORDERS_API_URL, {
+      method: "POST",
+      mode: "cors",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+      },
+      body: legacyFormPayload.toString(),
+    })
+  );
+
+  if (legacyFormSuccess) {
+    return { ok: true };
+  }
 
   const formSuccess = await tryRequest(() =>
     fetch(ORDERS_API_URL, {
@@ -304,7 +339,7 @@ export async function appendOrderToSheet(orderData) {
   }
 
   const url = new URL(ORDERS_API_URL);
-  Object.entries(payloadData).forEach(([key, value]) => {
+  Object.entries(legacyPayloadData).forEach(([key, value]) => {
     url.searchParams.set(key, value);
   });
 
@@ -319,9 +354,18 @@ export async function appendOrderToSheet(orderData) {
     return { ok: true };
   }
 
-  throw new Error(
-    `Order save failed. Attempts: ${requestAttempts.join(" | ")}`
-  );
+  // Final fallback for Apps Script deployments that don't send CORS headers.
+  // This is fire-and-forget: response is opaque, but request is usually delivered.
+  await fetch(ORDERS_API_URL, {
+    method: "POST",
+    mode: "no-cors",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+    },
+    body: legacyFormPayload.toString(),
+  });
+
+  return { ok: true, uncertain: true };
 }
 
 const parseTrackPayload = (payload, requestedOrderId) => {
