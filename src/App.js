@@ -127,7 +127,22 @@ const toCategoryLabel = (value, name) => {
 };
 
 const BrandStrip = () => {
-  const brands = [amul, campa, coke, heinz, hellman, maggi, mdh, nestle, veeba];
+  const brands = [
+    amul,
+    campa,
+    coke,
+    heinz,
+    hellman,
+    maggi,
+    mdh,
+    nestle,
+    veeba,
+    "/brands/kissan.png",
+    "/brands/knorr.png",
+    "/brands/everest.png",
+    "/brands/mtr.png",
+    "/brands/chings.svg",
+  ];
 
   return (
     <div className="brand-strip">
@@ -450,11 +465,6 @@ function App() {
             <p>Fresh snacks. Fast ordering. Smooth pickup.</p>
           </div>
         </div>
-        <div className="hero-bar" aria-label="Service highlights">
-          <span className="hero-chip">Order IDs reset daily from 1</span>
-          <span className="hero-chip">Track today's order by ID</span>
-          <span className="hero-chip">Live status after payment</span>
-        </div>
       </header>
       <main className="main-layout">
         <Menu
@@ -474,50 +484,51 @@ function App() {
           error={menuError}
           onRetry={() => loadMenu()}
         />
-        <Cart
-          items={cartItems}
-          total={totalPrice}
-          onRemove={removeFromCart}
-          onCheckout={openCheckoutModal}
-          isSavingOrder={isSavingOrder}
-          error={checkoutError}
-        />
-      </main>
-
-      <section className="panel track-panel">
-        <div className="panel-head">
-          <h2>Track Today's Order</h2>
-          <span className="panel-label">{getTodayDateKey()}</span>
-        </div>
-        <div className="track-form">
-          <input
-            type="text"
-            inputMode="numeric"
-            value={trackOrderIdInput}
-            onChange={(event) => setTrackOrderIdInput(event.target.value)}
-            placeholder="Enter order ID (e.g. 12)"
+        <div className="sidebar-stack">
+          <Cart
+            items={cartItems}
+            total={totalPrice}
+            onRemove={removeFromCart}
+            onCheckout={openCheckoutModal}
+            isSavingOrder={isSavingOrder}
+            error={checkoutError}
           />
-          <button type="button" onClick={trackOrderById}>
-            Track
-          </button>
+          <section className="panel track-panel">
+            <div className="panel-head">
+              <h2>Track Today's Order</h2>
+              <span className="panel-label">{getTodayDateKey()}</span>
+            </div>
+            <div className="track-form">
+              <input
+                type="text"
+                inputMode="numeric"
+                value={trackOrderIdInput}
+                onChange={(event) => setTrackOrderIdInput(event.target.value)}
+                placeholder="Enter order ID (e.g. 12)"
+              />
+              <button type="button" onClick={trackOrderById}>
+                Track
+              </button>
+            </div>
+
+            {trackingError ? <p className="error-text">{trackingError}</p> : null}
+
+            {liveTrackedOrder ? (
+              <div className="track-result">
+                <p>
+                  <strong>Order:</strong> #{liveTrackedOrder.orderId}
+                </p>
+                <p>
+                  <strong>Status:</strong> {STATUS_TEXT[liveTrackedOrder.status]}
+                </p>
+                <p>
+                  <strong>Total:</strong> Rs. {Number(liveTrackedOrder.total).toFixed(2)}
+                </p>
+              </div>
+            ) : null}
+          </section>
         </div>
-
-        {trackingError ? <p className="error-text">{trackingError}</p> : null}
-
-        {liveTrackedOrder ? (
-          <div className="track-result">
-            <p>
-              <strong>Order:</strong> #{liveTrackedOrder.orderId}
-            </p>
-            <p>
-              <strong>Status:</strong> {STATUS_TEXT[liveTrackedOrder.status]}
-            </p>
-            <p>
-              <strong>Total:</strong> Rs. {Number(liveTrackedOrder.total).toFixed(2)}
-            </p>
-          </div>
-        ) : null}
-      </section>
+      </main>
 
       <BrandStrip />
 

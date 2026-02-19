@@ -81,6 +81,11 @@
   align-items: start;
 }
 
+.sidebar-stack {
+  display: grid;
+  gap: 14px;
+}
+
 .panel {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -374,15 +379,14 @@ button:disabled {
 
 .brand-strip img {
   width: auto;
-  height: 28px;
+  height: 32px;
   object-fit: contain;
-  filter: grayscale(100%);
-  opacity: 0.84;
+  filter: none;
+  opacity: 1;
 }
 
 .track-panel {
-  max-width: 1120px;
-  margin: 18px auto 0;
+  margin: 0;
 }
 
 .track-form {
