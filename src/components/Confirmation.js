@@ -12,6 +12,7 @@ const STATUS_MESSAGE = {
   payment_verified: "Payment is verified. Your order will move to preparation soon.",
   preparing: "Kitchen is preparing your order now.",
   ready_for_pickup: "Your order is ready. Please collect it at the counter.",
+  cancelled: "This order has been cancelled. Contact support if needed.",
 };
 
 function getStepState(orderStatus, stepId) {
@@ -50,7 +51,9 @@ function Confirmation({ order, onConfirmPayment, onNewOrder }) {
   return (
     <section className="panel confirmation-panel">
       <h2>{isPaid ? "Order in Progress" : "Awaiting Payment"}</h2>
-      <p className="muted-text">{STATUS_MESSAGE[order.status]}</p>
+      <p className="muted-text">
+        {STATUS_MESSAGE[order.status] || "Status updated. Please check again shortly."}
+      </p>
 
       <p>
         <strong>Order ID:</strong> {order.orderId}

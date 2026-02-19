@@ -2,6 +2,7 @@ const ORDERS_API_URL = process.env.REACT_APP_ORDERS_API_URL;
 const MENU_API_URL = process.env.REACT_APP_MENU_API_URL || ORDERS_API_URL;
 const DEFAULT_MENU_IMAGE = "/menu-placeholder.svg";
 const ORDER_POST_ACTION = process.env.REACT_APP_ORDER_POST_ACTION || "appendOrder";
+const TRACK_ORDER_ACTION = process.env.REACT_APP_TRACK_ORDER_ACTION || "trackOrder";
 const STABLE_MENU_IMAGE_BY_NAME = {
   "vada pav":
     "https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=800&q=80",
@@ -172,6 +173,7 @@ const buildOrderPayload = ({
   items,
   total,
   timestamp,
+  status,
 }) => ({
   action: ORDER_POST_ACTION,
   orderId: String(orderId),
@@ -182,10 +184,70 @@ const buildOrderPayload = ({
   items,
   total: Number(total).toFixed(2),
   timestamp,
+  status: status || "payment_verified",
   name: customerName,
   email: customerEmail,
   phone: customerPhone,
 });
+
+const normalizeStatus = (value) => {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+
+  const map = {
+    pending_payment: "pending_payment",
+    awaiting_payment: "pending_payment",
+    payment_pending: "pending_payment",
+    payment_verified: "payment_verified",
+    paid: "payment_verified",
+    preparing: "preparing",
+    in_kitchen: "preparing",
+    cooking: "preparing",
+    ready: "ready_for_pickup",
+    ready_for_pickup: "ready_for_pickup",
+    complete: "ready_for_pickup",
+    completed: "ready_for_pickup",
+    cancelled: "cancelled",
+    canceled: "cancelled",
+  };
+
+  return map[normalized] || "";
+};
+
+const readField = (source, keys, fallback = "") => {
+  for (const key of keys) {
+    if (source && source[key] !== undefined && source[key] !== null && source[key] !== "") {
+      return source[key];
+    }
+  }
+  return fallback;
+};
+
+const normalizeTrackedOrder = (rawOrder) => {
+  if (!rawOrder || typeof rawOrder !== "object") {
+    return null;
+  }
+
+  const orderIdValue = readField(rawOrder, ["orderId", "id", "Order ID", "OrderId"], "");
+  const orderId = Number(orderIdValue);
+  if (!Number.isInteger(orderId) || orderId <= 0) {
+    return null;
+  }
+
+  const statusRaw = readField(rawOrder, ["status", "Status", "orderStatus"], "");
+  const status = normalizeStatus(statusRaw);
+
+  return {
+    orderId,
+    orderDateKey: String(readField(rawOrder, ["orderDate", "date", "Date"], "") || ""),
+    total: Number(readField(rawOrder, ["total", "Total", "amount"], 0)) || 0,
+    items: String(readField(rawOrder, ["items", "Items"], "") || ""),
+    paidAt: String(readField(rawOrder, ["paidAt", "paymentTime", "timestamp"], "") || ""),
+    sheetStatus: status || "",
+  };
+};
 
 export async function appendOrderToSheet(orderData) {
   if (!hasConfiguredValue(ORDERS_API_URL)) {
@@ -260,4 +322,93 @@ export async function appendOrderToSheet(orderData) {
   throw new Error(
     `Order save failed. Attempts: ${requestAttempts.join(" | ")}`
   );
+}
+
+const parseTrackPayload = (payload, requestedOrderId) => {
+  const candidates = [];
+
+  if (Array.isArray(payload)) {
+    candidates.push(...payload);
+  } else if (payload && typeof payload === "object") {
+    if (Array.isArray(payload.items)) {
+      candidates.push(...payload.items);
+    }
+    if (Array.isArray(payload.orders)) {
+      candidates.push(...payload.orders);
+    }
+    if (payload.order && typeof payload.order === "object") {
+      candidates.push(payload.order);
+    }
+    candidates.push(payload);
+  }
+
+  const normalized = candidates
+    .map((candidate) => normalizeTrackedOrder(candidate))
+    .filter(Boolean);
+
+  if (!normalized.length) {
+    return null;
+  }
+
+  return (
+    normalized.find((item) => Number(item.orderId) === Number(requestedOrderId)) ||
+    normalized[0]
+  );
+};
+
+export async function fetchOrderStatusFromSheet({ orderDateKey, orderId }) {
+  if (!hasConfiguredValue(ORDERS_API_URL)) {
+    throw new Error("Set REACT_APP_ORDERS_API_URL in .env");
+  }
+
+  if (!orderId) {
+    throw new Error("orderId is required");
+  }
+
+  const actions = [TRACK_ORDER_ACTION, "track", "orderStatus"];
+  let lastError = "";
+
+  for (const action of actions) {
+    try {
+      const url = new URL(ORDERS_API_URL);
+      url.searchParams.set("action", action);
+      url.searchParams.set("orderId", String(orderId));
+      url.searchParams.set("id", String(orderId));
+      if (orderDateKey) {
+        url.searchParams.set("orderDate", orderDateKey);
+        url.searchParams.set("date", orderDateKey);
+      }
+
+      const response = await fetch(url.toString(), {
+        method: "GET",
+        mode: "cors",
+      });
+
+      if (!response.ok) {
+        lastError = `HTTP ${response.status}`;
+        continue;
+      }
+
+      const text = await response.text();
+      if (!text) {
+        continue;
+      }
+
+      let payload;
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        continue;
+      }
+
+      const parsed = parseTrackPayload(payload, orderId);
+      if (parsed) {
+        return parsed;
+      }
+    } catch (error) {
+      lastError = error?.message || "Network/CORS error";
+    }
+  }
+
+  throw new Error(lastError || "Unable to fetch order status");
 }

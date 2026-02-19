@@ -2,7 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Menu from "./components/Menu";
 import Cart from "./components/Cart";
 import Confirmation from "./components/Confirmation";
-import { appendOrderToSheet, fetchActiveMenuItems } from "./services/sheetsService";
+import {
+  appendOrderToSheet,
+  fetchActiveMenuItems,
+  fetchOrderStatusFromSheet,
+} from "./services/sheetsService";
 import "./App.css";
 import amul from "./assets/brands/amul.png";
 import campa from "./assets/brands/campa.png";
@@ -28,6 +32,7 @@ const STATUS_TEXT = {
   payment_verified: "Payment verified",
   preparing: "Preparing order",
   ready_for_pickup: "Ready for pickup",
+  cancelled: "Cancelled",
 };
 
 const getTodayDateKey = () => {
@@ -77,6 +82,10 @@ const getNextDailyOrderId = (dateKey) => {
 };
 
 const deriveStatus = (orderRecord, nowMs) => {
+  if (orderRecord?.sheetStatus) {
+    return orderRecord.sheetStatus;
+  }
+
   if (!orderRecord?.paidAt) {
     return "pending_payment";
   }
@@ -278,6 +287,93 @@ function App() {
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (!orderDetails?.orderId || !orderDetails?.orderDateKey) {
+      return undefined;
+    }
+
+    let active = true;
+
+    const pullStatus = async () => {
+      try {
+        const remoteOrder = await fetchOrderStatusFromSheet({
+          orderDateKey: orderDetails.orderDateKey,
+          orderId: orderDetails.orderId,
+        });
+
+        if (!active || !remoteOrder) {
+          return;
+        }
+
+        setOrderDetails((prev) => {
+          if (!prev || prev.orderId !== orderDetails.orderId) {
+            return prev;
+          }
+
+          const merged = {
+            ...prev,
+            ...remoteOrder,
+            saving: false,
+            error: null,
+          };
+
+          upsertOrderForDate(prev.orderDateKey, merged);
+          return merged;
+        });
+      } catch {
+        // fallback to local timer status if sheet polling fails
+      }
+    };
+
+    pullStatus();
+    const intervalId = setInterval(pullStatus, 10000);
+
+    return () => {
+      active = false;
+      clearInterval(intervalId);
+    };
+  }, [orderDetails?.orderId, orderDetails?.orderDateKey]);
+
+  useEffect(() => {
+    if (!trackedOrder?.orderId || !trackedOrder?.orderDateKey) {
+      return undefined;
+    }
+
+    let active = true;
+
+    const pullStatus = async () => {
+      try {
+        const remoteOrder = await fetchOrderStatusFromSheet({
+          orderDateKey: trackedOrder.orderDateKey,
+          orderId: trackedOrder.orderId,
+        });
+
+        if (!active || !remoteOrder) {
+          return;
+        }
+
+        setTrackedOrder((prev) =>
+          prev && prev.orderId === trackedOrder.orderId
+            ? {
+                ...prev,
+                ...remoteOrder,
+              }
+            : prev
+        );
+      } catch {
+        // keep showing current data
+      }
+    };
+
+    pullStatus();
+    const intervalId = setInterval(pullStatus, 10000);
+
+    return () => {
+      active = false;
+      clearInterval(intervalId);
+    };
+  }, [trackedOrder?.orderId, trackedOrder?.orderDateKey]);
+
   const addToCart = (item) => {
     setCartItems((prev) => [...prev, item]);
   };
@@ -389,6 +485,7 @@ function App() {
         items: updatedOrder.items,
         total: updatedOrder.total,
         timestamp: nowIso,
+        status: "payment_verified",
       });
 
       upsertOrderForDate(updatedOrder.orderDateKey, updatedOrder);
@@ -404,7 +501,7 @@ function App() {
     }
   };
 
-  const trackOrderById = () => {
+  const trackOrderById = async () => {
     setTrackingError("");
 
     const trimmed = trackOrderIdInput.trim();
@@ -417,16 +514,34 @@ function App() {
     }
 
     const todayKey = getTodayDateKey();
-    const todayOrders = readOrdersForDate(todayKey);
-    const order = todayOrders.find((record) => Number(record.orderId) === parsedId);
 
-    if (!order) {
-      setTrackedOrder(null);
-      setTrackingError(`Order #${parsedId} not found for ${todayKey}.`);
+    try {
+      const remoteOrder = await fetchOrderStatusFromSheet({
+        orderDateKey: todayKey,
+        orderId: parsedId,
+      });
+
+      if (remoteOrder) {
+        setTrackedOrder({
+          ...remoteOrder,
+          orderDateKey: remoteOrder.orderDateKey || todayKey,
+        });
+        return;
+      }
+    } catch {
+      // fallback to local cache
+    }
+
+    const todayOrders = readOrdersForDate(todayKey);
+    const localOrder = todayOrders.find((record) => Number(record.orderId) === parsedId);
+
+    if (localOrder) {
+      setTrackedOrder(localOrder);
       return;
     }
 
-    setTrackedOrder(order);
+    setTrackedOrder(null);
+    setTrackingError(`Order #${parsedId} not found for ${todayKey}.`);
   };
 
   const startNewOrder = () => {
@@ -519,7 +634,8 @@ function App() {
                   <strong>Order:</strong> #{liveTrackedOrder.orderId}
                 </p>
                 <p>
-                  <strong>Status:</strong> {STATUS_TEXT[liveTrackedOrder.status]}
+                  <strong>Status:</strong>{" "}
+                  {STATUS_TEXT[liveTrackedOrder.status] || liveTrackedOrder.status || "Unknown"}
                 </p>
                 <p>
                   <strong>Total:</strong> Rs. {Number(liveTrackedOrder.total).toFixed(2)}
