@@ -1,6 +1,7 @@
 const ORDERS_API_URL = process.env.REACT_APP_ORDERS_API_URL;
 const MENU_API_URL = process.env.REACT_APP_MENU_API_URL || ORDERS_API_URL;
 const DEFAULT_MENU_IMAGE = "/menu-placeholder.svg";
+const ORDER_POST_ACTION = process.env.REACT_APP_ORDER_POST_ACTION || "appendOrder";
 const STABLE_MENU_IMAGE_BY_NAME = {
   "vada pav":
     "https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=800&q=80",
@@ -88,7 +89,6 @@ const normalizeImageUrl = (value, name) => {
       return stableImageForName(name);
     }
 
-    // source.unsplash.com can be flaky/hotlink-unfriendly; use stable direct URL.
     if (parsed.hostname === "source.unsplash.com") {
       return stableImageForName(name);
     }
@@ -163,39 +163,101 @@ export async function fetchActiveMenuItems() {
     .filter((row) => row && row.active);
 }
 
-export async function appendOrderToSheet({
+const buildOrderPayload = ({
   orderId,
+  orderDateKey,
   customerName,
   customerEmail,
   customerPhone,
   items,
   total,
   timestamp,
-}) {
+}) => ({
+  action: ORDER_POST_ACTION,
+  orderId: String(orderId),
+  orderDate: orderDateKey || "",
+  customerName,
+  customerEmail,
+  customerPhone,
+  items,
+  total: Number(total).toFixed(2),
+  timestamp,
+  name: customerName,
+  email: customerEmail,
+  phone: customerPhone,
+});
+
+export async function appendOrderToSheet(orderData) {
   if (!hasConfiguredValue(ORDERS_API_URL)) {
     throw new Error("Set REACT_APP_ORDERS_API_URL in .env");
   }
 
-  const payload = new URLSearchParams({
-    orderId: String(orderId),
-    customerName,
-    customerEmail,
-    customerPhone,
-    items,
-    total: total.toFixed(2),
-    timestamp,
+  const payloadData = buildOrderPayload(orderData);
+  const formPayload = new URLSearchParams(payloadData);
+  const requestAttempts = [];
+
+  const tryRequest = async (requestFn) => {
+    try {
+      const response = await requestFn();
+      if (response.ok) {
+        return true;
+      }
+      const body = await response.text().catch(() => "");
+      requestAttempts.push(`HTTP ${response.status} ${body}`.trim());
+      return false;
+    } catch (error) {
+      requestAttempts.push(error?.message || "Network/CORS error");
+      return false;
+    }
+  };
+
+  const formSuccess = await tryRequest(() =>
+    fetch(ORDERS_API_URL, {
+      method: "POST",
+      mode: "cors",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+      },
+      body: formPayload.toString(),
+    })
+  );
+
+  if (formSuccess) {
+    return { ok: true };
+  }
+
+  const jsonSuccess = await tryRequest(() =>
+    fetch(ORDERS_API_URL, {
+      method: "POST",
+      mode: "cors",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payloadData),
+    })
+  );
+
+  if (jsonSuccess) {
+    return { ok: true };
+  }
+
+  const url = new URL(ORDERS_API_URL);
+  Object.entries(payloadData).forEach(([key, value]) => {
+    url.searchParams.set(key, value);
   });
 
-  // Apps Script web apps often do not return CORS headers.
-  // `no-cors` allows submit from browser, but response is opaque.
-  await fetch(ORDERS_API_URL, {
-    method: "POST",
-    mode: "no-cors",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-    },
-    body: payload.toString(),
-  });
+  const getSuccess = await tryRequest(() =>
+    fetch(url.toString(), {
+      method: "GET",
+      mode: "cors",
+    })
+  );
 
-  return { ok: true };
+  if (getSuccess) {
+    return { ok: true };
+  }
+
+  throw new Error(
+    `Order save failed. Attempts: ${requestAttempts.join(" | ")}`
+  );
 }

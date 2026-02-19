@@ -380,6 +380,40 @@ button:disabled {
   opacity: 0.84;
 }
 
+.track-panel {
+  max-width: 1120px;
+  margin: 18px auto 0;
+}
+
+.track-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+}
+
+.track-form input {
+  height: 40px;
+  border: 1px solid #c6d8cb;
+  border-radius: 9px;
+  padding: 0 10px;
+}
+
+.track-result {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--surface-soft);
+}
+
+.track-result p {
+  margin: 0 0 6px;
+}
+
+.track-result p:last-child {
+  margin-bottom: 0;
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -553,6 +587,14 @@ select:focus {
   }
 
   .modal-actions button {
+    width: 100%;
+  }
+
+  .track-form {
+    grid-template-columns: 1fr;
+  }
+
+  .track-form button {
     width: 100%;
   }
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Menu from "./components/Menu";
 import Cart from "./components/Cart";
 import Confirmation from "./components/Confirmation";
@@ -15,29 +15,83 @@ import nestle from "./assets/brands/nestle.png";
 import veeba from "./assets/brands/veeba.png";
 
 const MENU_REFRESH_INTERVAL_MS = 30000;
+const STATUS_TICK_INTERVAL_MS = 1000;
 const DEFAULT_CATEGORY = "Popular";
 const ALL_CATEGORIES = "All";
+const PREPARING_START_MS = 20000;
+const READY_START_MS = 50000;
+const ORDER_COUNTER_KEY_PREFIX = "anupama:orderCounter:";
+const ORDERS_STORAGE_KEY_PREFIX = "anupama:orders:";
 
-const inferCategoryFromName = (name) => {
-  const value = String(name || "").toLowerCase();
+const STATUS_TEXT = {
+  pending_payment: "Awaiting payment",
+  payment_verified: "Payment verified",
+  preparing: "Preparing order",
+  ready_for_pickup: "Ready for pickup",
+};
 
-  if (/(tea|coffee|cold coffee|drink|juice|shake|lassi|coke|campa)/.test(value)) {
-    return "Beverages";
+const getTodayDateKey = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const getCounterKey = (dateKey) => `${ORDER_COUNTER_KEY_PREFIX}${dateKey}`;
+const getOrdersKey = (dateKey) => `${ORDERS_STORAGE_KEY_PREFIX}${dateKey}`;
+
+const readOrdersForDate = (dateKey) => {
+  try {
+    const raw = localStorage.getItem(getOrdersKey(dateKey));
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeOrdersForDate = (dateKey, records) => {
+  localStorage.setItem(getOrdersKey(dateKey), JSON.stringify(records));
+};
+
+const upsertOrderForDate = (dateKey, orderRecord) => {
+  const records = readOrdersForDate(dateKey);
+  const index = records.findIndex((record) => record.orderId === orderRecord.orderId);
+
+  if (index >= 0) {
+    records[index] = orderRecord;
+  } else {
+    records.push(orderRecord);
   }
 
-  if (/(sandwich|vada pav|samosa|roll|burger|cutlet|toast)/.test(value)) {
-    return "Quick Bites";
+  writeOrdersForDate(dateKey, records);
+};
+
+const getNextDailyOrderId = (dateKey) => {
+  const counterKey = getCounterKey(dateKey);
+  const current = Number(localStorage.getItem(counterKey) || 0);
+  const next = Number.isFinite(current) ? current + 1 : 1;
+  localStorage.setItem(counterKey, String(next));
+  return next;
+};
+
+const deriveStatus = (orderRecord, nowMs) => {
+  if (!orderRecord?.paidAt) {
+    return "pending_payment";
   }
 
-  if (/(idli|dosa|uttapam|poha|upma|paratha)/.test(value)) {
-    return "South Indian";
+  const elapsedMs = Math.max(0, nowMs - new Date(orderRecord.paidAt).getTime());
+
+  if (elapsedMs < PREPARING_START_MS) {
+    return "payment_verified";
   }
 
-  if (/(noodle|manchurian|chowmein|rice|fried rice)/.test(value)) {
-    return "Meals";
+  if (elapsedMs < READY_START_MS) {
+    return "preparing";
   }
 
-  return DEFAULT_CATEGORY;
+  return "ready_for_pickup";
 };
 
 const toCategoryLabel = (value, name) => {
@@ -51,7 +105,25 @@ const toCategoryLabel = (value, name) => {
       .join(" ");
   }
 
-  return inferCategoryFromName(name);
+  const lowerName = String(name || "").toLowerCase();
+
+  if (/(tea|coffee|cold coffee|drink|juice|shake|lassi|coke|campa)/.test(lowerName)) {
+    return "Beverages";
+  }
+
+  if (/(sandwich|vada pav|samosa|roll|burger|cutlet|toast)/.test(lowerName)) {
+    return "Quick Bites";
+  }
+
+  if (/(idli|dosa|uttapam|poha|upma|paratha)/.test(lowerName)) {
+    return "South Indian";
+  }
+
+  if (/(noodle|manchurian|chowmein|rice|fried rice)/.test(lowerName)) {
+    return "Meals";
+  }
+
+  return DEFAULT_CATEGORY;
 };
 
 const BrandStrip = () => {
@@ -60,12 +132,7 @@ const BrandStrip = () => {
   return (
     <div className="brand-strip">
       {brands.map((logo, index) => (
-        <img
-          key={index}
-          src={logo}
-          className="brand-strip-logo"
-          alt="Partner brand logo"
-        />
+        <img key={index} src={logo} className="brand-strip-logo" alt="Partner brand logo" />
       ))}
     </div>
   );
@@ -87,7 +154,10 @@ function App() {
     email: "",
     phone: "",
   });
-  const orderStatusTimerRef = useRef(null);
+  const [statusNowMs, setStatusNowMs] = useState(Date.now());
+  const [trackOrderIdInput, setTrackOrderIdInput] = useState("");
+  const [trackedOrder, setTrackedOrder] = useState(null);
+  const [trackingError, setTrackingError] = useState("");
 
   const totalPrice = useMemo(
     () => cartItems.reduce((sum, item) => sum + item.price, 0),
@@ -123,12 +193,27 @@ function App() {
     });
   }, [menuItemsWithCategory, activeCategory, searchQuery]);
 
-  const clearOrderStatusTimer = useCallback(() => {
-    if (orderStatusTimerRef.current) {
-      clearTimeout(orderStatusTimerRef.current);
-      orderStatusTimerRef.current = null;
+  const currentOrder = useMemo(() => {
+    if (!orderDetails) {
+      return null;
     }
-  }, []);
+
+    return {
+      ...orderDetails,
+      status: deriveStatus(orderDetails, statusNowMs),
+    };
+  }, [orderDetails, statusNowMs]);
+
+  const liveTrackedOrder = useMemo(() => {
+    if (!trackedOrder) {
+      return null;
+    }
+
+    return {
+      ...trackedOrder,
+      status: deriveStatus(trackedOrder, statusNowMs),
+    };
+  }, [trackedOrder, statusNowMs]);
 
   const loadMenu = useCallback(async (options = {}) => {
     const { silent = false } = options;
@@ -171,44 +256,12 @@ function App() {
   }, [categories, activeCategory]);
 
   useEffect(() => {
-    clearOrderStatusTimer();
+    const timer = setInterval(() => {
+      setStatusNowMs(Date.now());
+    }, STATUS_TICK_INTERVAL_MS);
 
-    if (!orderDetails?.paid) {
-      return;
-    }
-
-    if (orderDetails.status === "payment_verified") {
-      orderStatusTimerRef.current = setTimeout(() => {
-        setOrderDetails((prev) =>
-          prev
-            ? {
-                ...prev,
-                status: "preparing",
-                statusUpdatedAt: new Date().toISOString(),
-              }
-            : prev
-        );
-      }, 20000);
-    }
-
-    if (orderDetails.status === "preparing") {
-      orderStatusTimerRef.current = setTimeout(() => {
-        setOrderDetails((prev) =>
-          prev
-            ? {
-                ...prev,
-                status: "ready_for_pickup",
-                statusUpdatedAt: new Date().toISOString(),
-              }
-            : prev
-        );
-      }, 30000);
-    }
-
-    return clearOrderStatusTimer;
-  }, [orderDetails?.paid, orderDetails?.status, clearOrderStatusTimer]);
-
-  useEffect(() => clearOrderStatusTimer, [clearOrderStatusTimer]);
+    return () => clearInterval(timer);
+  }, []);
 
   const addToCart = (item) => {
     setCartItems((prev) => [...prev, item]);
@@ -268,13 +321,17 @@ function App() {
 
     setIsSavingOrder(false);
     setCheckoutError("");
-    clearOrderStatusTimer();
 
-    const orderId = Date.now();
+    const todayKey = getTodayDateKey();
+    const orderId = getNextDailyOrderId(todayKey);
+    const createdAt = new Date().toISOString();
     const items = cartItems.map((item) => `${item.name} x${item.quantity || 1}`).join(", ");
 
-    setOrderDetails({
+    const newOrder = {
       orderId,
+      orderDateKey: todayKey,
+      createdAt,
+      paidAt: null,
       total: totalPrice,
       customer: {
         name: customer.name.trim(),
@@ -282,13 +339,12 @@ function App() {
         phone: customer.phone.trim(),
       },
       items,
-      paid: false,
-      status: "pending_payment",
-      statusUpdatedAt: new Date().toISOString(),
       saving: false,
       error: null,
-    });
+    };
 
+    upsertOrderForDate(todayKey, newOrder);
+    setOrderDetails(newOrder);
     setCartItems([]);
     setIsCheckoutModalOpen(false);
   };
@@ -300,26 +356,28 @@ function App() {
 
     setOrderDetails((prev) => ({ ...prev, saving: true, error: null }));
 
-    const timestamp = new Date().toISOString();
+    const nowIso = new Date().toISOString();
+    const updatedOrder = {
+      ...orderDetails,
+      paidAt: nowIso,
+      saving: false,
+      error: null,
+    };
 
     try {
       await appendOrderToSheet({
-        orderId: orderDetails.orderId,
-        customerName: orderDetails.customer.name,
-        customerEmail: orderDetails.customer.email,
-        customerPhone: orderDetails.customer.phone,
-        items: orderDetails.items,
-        total: orderDetails.total,
-        timestamp,
+        orderId: updatedOrder.orderId,
+        orderDateKey: updatedOrder.orderDateKey,
+        customerName: updatedOrder.customer.name,
+        customerEmail: updatedOrder.customer.email,
+        customerPhone: updatedOrder.customer.phone,
+        items: updatedOrder.items,
+        total: updatedOrder.total,
+        timestamp: nowIso,
       });
 
-      setOrderDetails((prev) => ({
-        ...prev,
-        paid: true,
-        saving: false,
-        status: "payment_verified",
-        statusUpdatedAt: new Date().toISOString(),
-      }));
+      upsertOrderForDate(updatedOrder.orderDateKey, updatedOrder);
+      setOrderDetails(updatedOrder);
     } catch (error) {
       setOrderDetails((prev) => ({
         ...prev,
@@ -331,13 +389,37 @@ function App() {
     }
   };
 
+  const trackOrderById = () => {
+    setTrackingError("");
+
+    const trimmed = trackOrderIdInput.trim();
+    const parsedId = Number(trimmed);
+
+    if (!trimmed || !Number.isInteger(parsedId) || parsedId <= 0) {
+      setTrackedOrder(null);
+      setTrackingError("Enter a valid numeric order ID.");
+      return;
+    }
+
+    const todayKey = getTodayDateKey();
+    const todayOrders = readOrdersForDate(todayKey);
+    const order = todayOrders.find((record) => Number(record.orderId) === parsedId);
+
+    if (!order) {
+      setTrackedOrder(null);
+      setTrackingError(`Order #${parsedId} not found for ${todayKey}.`);
+      return;
+    }
+
+    setTrackedOrder(order);
+  };
+
   const startNewOrder = () => {
-    clearOrderStatusTimer();
     setOrderDetails(null);
     setCheckoutError("");
   };
 
-  if (orderDetails) {
+  if (currentOrder) {
     return (
       <div className="app">
         <header className="app-header">
@@ -350,7 +432,7 @@ function App() {
           </div>
         </header>
         <Confirmation
-          order={orderDetails}
+          order={currentOrder}
           onConfirmPayment={confirmPayment}
           onNewOrder={startNewOrder}
         />
@@ -369,9 +451,9 @@ function App() {
           </div>
         </div>
         <div className="hero-bar" aria-label="Service highlights">
-          <span className="hero-chip">Live menu updates</span>
-          <span className="hero-chip">Search and category filters</span>
-          <span className="hero-chip">Live order status after payment</span>
+          <span className="hero-chip">Order IDs reset daily from 1</span>
+          <span className="hero-chip">Track today's order by ID</span>
+          <span className="hero-chip">Live status after payment</span>
         </div>
       </header>
       <main className="main-layout">
@@ -401,6 +483,42 @@ function App() {
           error={checkoutError}
         />
       </main>
+
+      <section className="panel track-panel">
+        <div className="panel-head">
+          <h2>Track Today's Order</h2>
+          <span className="panel-label">{getTodayDateKey()}</span>
+        </div>
+        <div className="track-form">
+          <input
+            type="text"
+            inputMode="numeric"
+            value={trackOrderIdInput}
+            onChange={(event) => setTrackOrderIdInput(event.target.value)}
+            placeholder="Enter order ID (e.g. 12)"
+          />
+          <button type="button" onClick={trackOrderById}>
+            Track
+          </button>
+        </div>
+
+        {trackingError ? <p className="error-text">{trackingError}</p> : null}
+
+        {liveTrackedOrder ? (
+          <div className="track-result">
+            <p>
+              <strong>Order:</strong> #{liveTrackedOrder.orderId}
+            </p>
+            <p>
+              <strong>Status:</strong> {STATUS_TEXT[liveTrackedOrder.status]}
+            </p>
+            <p>
+              <strong>Total:</strong> Rs. {Number(liveTrackedOrder.total).toFixed(2)}
+            </p>
+          </div>
+        ) : null}
+      </section>
+
       <BrandStrip />
 
       {isCheckoutModalOpen ? (

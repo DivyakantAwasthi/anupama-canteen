@@ -45,9 +45,11 @@ function Confirmation({ order, onConfirmPayment, onNewOrder }) {
     return null;
   }
 
+  const isPaid = Boolean(order.paidAt);
+
   return (
     <section className="panel confirmation-panel">
-      <h2>{order.paid ? "Order in Progress" : "Awaiting Payment"}</h2>
+      <h2>{isPaid ? "Order in Progress" : "Awaiting Payment"}</h2>
       <p className="muted-text">{STATUS_MESSAGE[order.status]}</p>
 
       <p>
@@ -68,7 +70,7 @@ function Confirmation({ order, onConfirmPayment, onNewOrder }) {
         })}
       </ol>
 
-      {!order.paid ? (
+      {!isPaid ? (
         <>
           <div className="qr-wrap">
             <QRCodeCanvas value={qrValue} size={220} includeMargin />
@@ -83,7 +85,7 @@ function Confirmation({ order, onConfirmPayment, onNewOrder }) {
       {order.error ? <p className="error-text">{order.error}</p> : null}
 
       <div className="confirmation-actions">
-        {!order.paid ? (
+        {!isPaid ? (
           <button type="button" onClick={onConfirmPayment} disabled={order.saving}>
             {order.saving ? "Confirming..." : "I have paid (confirm)"}
           </button>
@@ -94,7 +96,7 @@ function Confirmation({ order, onConfirmPayment, onNewOrder }) {
           onClick={onNewOrder}
           disabled={order.saving}
         >
-          {order.paid ? "Place New Order" : "Cancel"}
+          {isPaid ? "Place New Order" : "Cancel"}
         </button>
       </div>
     </section>
