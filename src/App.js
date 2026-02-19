@@ -7,6 +7,7 @@ import {
   fetchActiveMenuItems,
   fetchOrderStatusFromSheet,
 } from "./services/sheetsService";
+import { sendWhatsAppStatusNotification } from "./services/whatsappService";
 import "./App.css";
 import amul from "./assets/brands/amul.png";
 import campa from "./assets/brands/campa.png";
@@ -26,12 +27,14 @@ const PREPARING_START_MS = 20000;
 const READY_START_MS = 50000;
 const ORDER_COUNTER_KEY_PREFIX = "anupama:orderCounter:";
 const ORDERS_STORAGE_KEY_PREFIX = "anupama:orders:";
+const WHATSAPP_SENT_KEY_PREFIX = "anupama:whatsappSent:";
 
 const STATUS_TEXT = {
   pending_payment: "Awaiting payment",
   payment_verified: "Payment verified",
   preparing: "Preparing order",
   ready_for_pickup: "Ready for pickup",
+  delivered: "Delivered",
   cancelled: "Cancelled",
 };
 
@@ -45,6 +48,8 @@ const getTodayDateKey = () => {
 
 const getCounterKey = (dateKey) => `${ORDER_COUNTER_KEY_PREFIX}${dateKey}`;
 const getOrdersKey = (dateKey) => `${ORDERS_STORAGE_KEY_PREFIX}${dateKey}`;
+const getWhatsAppSentKey = (orderDateKey, orderId, status) =>
+  `${WHATSAPP_SENT_KEY_PREFIX}${orderDateKey}:${orderId}:${status}`;
 
 const readOrdersForDate = (dateKey) => {
   try {
@@ -287,6 +292,36 @@ function App() {
     return () => clearInterval(timer);
   }, []);
 
+  const notifyWhatsAppForStatus = useCallback(async (orderRecord, status) => {
+    if (!orderRecord?.customer?.phone || !orderRecord?.orderDateKey || !orderRecord?.orderId) {
+      return;
+    }
+
+    const sentKey = getWhatsAppSentKey(
+      orderRecord.orderDateKey,
+      orderRecord.orderId,
+      status
+    );
+    if (localStorage.getItem(sentKey) === "1") {
+      return;
+    }
+
+    try {
+      await sendWhatsAppStatusNotification({
+        customerPhone: orderRecord.customer.phone,
+        customerName: orderRecord.customer.name,
+        orderId: orderRecord.orderId,
+        orderDateKey: orderRecord.orderDateKey,
+        total: orderRecord.total,
+        status,
+      });
+      localStorage.setItem(sentKey, "1");
+    } catch (error) {
+      // keep checkout/status flow working even if WhatsApp service is temporarily down
+      console.error("WhatsApp notification failed", error);
+    }
+  }, []);
+
   useEffect(() => {
     if (!orderDetails?.orderId || !orderDetails?.orderDateKey) {
       return undefined;
@@ -374,6 +409,23 @@ function App() {
     };
   }, [trackedOrder?.orderId, trackedOrder?.orderDateKey]);
 
+  useEffect(() => {
+    if (!currentOrder?.orderId || !currentOrder?.orderDateKey) {
+      return;
+    }
+
+    if (["preparing", "ready_for_pickup", "delivered"].includes(currentOrder.status)) {
+      notifyWhatsAppForStatus(currentOrder, currentOrder.status);
+    }
+  }, [
+    currentOrder,
+    currentOrder?.orderId,
+    currentOrder?.orderDateKey,
+    currentOrder?.status,
+    currentOrder?.customer?.phone,
+    notifyWhatsAppForStatus,
+  ]);
+
   const addToCart = (item) => {
     setCartItems((prev) => [...prev, item]);
   };
@@ -456,6 +508,7 @@ function App() {
 
     upsertOrderForDate(todayKey, newOrder);
     setOrderDetails(newOrder);
+    notifyWhatsAppForStatus(newOrder, "order_placed");
     setCartItems([]);
     setIsCheckoutModalOpen(false);
   };

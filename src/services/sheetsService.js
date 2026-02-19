@@ -225,8 +225,10 @@ const normalizeStatus = (value) => {
     cooking: "preparing",
     ready: "ready_for_pickup",
     ready_for_pickup: "ready_for_pickup",
-    complete: "ready_for_pickup",
-    completed: "ready_for_pickup",
+    delivered: "delivered",
+    delivered_successfully: "delivered",
+    complete: "delivered",
+    completed: "delivered",
     cancelled: "cancelled",
     canceled: "cancelled",
   };
