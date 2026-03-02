@@ -1,5 +1,7 @@
 const ORDERS_API_URL = process.env.REACT_APP_ORDERS_API_URL;
 const MENU_API_URL = process.env.REACT_APP_MENU_API_URL || ORDERS_API_URL;
+const APPEND_ORDER_ENDPOINT =
+  process.env.REACT_APP_APPEND_ORDER_ENDPOINT || "/append-order";
 const DEFAULT_MENU_IMAGE = "/menu-placeholder.svg";
 const ORDER_POST_ACTION = process.env.REACT_APP_ORDER_POST_ACTION || "appendOrder";
 const TRACK_ORDER_ACTION = process.env.REACT_APP_TRACK_ORDER_ACTION || "trackOrder";
@@ -269,48 +271,115 @@ const normalizeTrackedOrder = (rawOrder) => {
   };
 };
 
-export async function appendOrderToSheet(orderData) {
-  if (!hasConfiguredValue(ORDERS_API_URL)) {
-    throw new Error("Set REACT_APP_ORDERS_API_URL in .env");
+const looksLikeFailureText = (text) => {
+  const normalized = String(text || "").trim().toLowerCase();
+  if (!normalized) {
+    return false;
   }
 
+  return [
+    "error",
+    "failed",
+    "missing",
+    "invalid",
+    "unauthorized",
+    "forbidden",
+    "exception",
+    "not configured",
+  ].some((token) => normalized.includes(token));
+};
+
+const evaluateHttpResult = async (response) => {
+  const bodyText = await response.text().catch(() => "");
+
+  if (!response.ok) {
+    return {
+      ok: false,
+      detail: `HTTP ${response.status} ${bodyText}`.trim(),
+    };
+  }
+
+  const trimmed = bodyText.trim();
+  if (!trimmed) {
+    return { ok: true, detail: "HTTP 200 (empty body)" };
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed && typeof parsed === "object") {
+      if (parsed.ok === false || parsed.success === false || parsed.error) {
+        return {
+          ok: false,
+          detail: parsed.error || parsed.message || trimmed,
+        };
+      }
+
+      if (parsed.ok === true || parsed.success === true) {
+        return { ok: true, detail: "accepted" };
+      }
+    }
+  } catch {
+    // non-JSON response body
+  }
+
+  if (looksLikeFailureText(trimmed)) {
+    return { ok: false, detail: trimmed };
+  }
+
+  return { ok: true, detail: trimmed };
+};
+
+export async function appendOrderToSheet(orderData) {
   const payloadData = buildOrderPayload(orderData);
+  const proxyPayloadData = {
+    ...payloadData,
+    orderDateKey: orderData?.orderDateKey || "",
+  };
   const legacyPayloadData = buildLegacyOrderPayload(orderData);
   const formPayload = new URLSearchParams(payloadData);
   const legacyFormPayload = new URLSearchParams(legacyPayloadData);
   const requestAttempts = [];
 
-  const tryRequest = async (requestFn) => {
+  const tryRequest = async (label, requestFn) => {
     try {
       const response = await requestFn();
-      if (response.ok) {
+      const evaluated = await evaluateHttpResult(response);
+      if (evaluated.ok) {
         return true;
       }
-      const body = await response.text().catch(() => "");
-      requestAttempts.push(`HTTP ${response.status} ${body}`.trim());
+
+      requestAttempts.push(`${label}: ${evaluated.detail}`.trim());
       return false;
     } catch (error) {
-      requestAttempts.push(error?.message || "Network/CORS error");
+      requestAttempts.push(`${label}: ${error?.message || "Network/CORS error"}`);
       return false;
     }
   };
 
-  const legacyFormSuccess = await tryRequest(() =>
-    fetch(ORDERS_API_URL, {
+  const proxySuccess = await tryRequest("POST append-order proxy", () =>
+    fetch(APPEND_ORDER_ENDPOINT, {
       method: "POST",
       mode: "cors",
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+        "Content-Type": "application/json",
       },
-      body: legacyFormPayload.toString(),
+      body: JSON.stringify(proxyPayloadData),
     })
   );
 
-  if (legacyFormSuccess) {
+  if (proxySuccess) {
     return { ok: true };
   }
 
-  const formSuccess = await tryRequest(() =>
+  if (!hasConfiguredValue(ORDERS_API_URL)) {
+    throw new Error(
+      `Unable to write order: append-order proxy failed and REACT_APP_ORDERS_API_URL is not configured. Attempts: ${requestAttempts.join(
+        " | "
+      )}`
+    );
+  }
+
+  const formSuccess = await tryRequest("POST form(action)", () =>
     fetch(ORDERS_API_URL, {
       method: "POST",
       mode: "cors",
@@ -325,7 +394,7 @@ export async function appendOrderToSheet(orderData) {
     return { ok: true };
   }
 
-  const jsonSuccess = await tryRequest(() =>
+  const jsonSuccess = await tryRequest("POST json(action)", () =>
     fetch(ORDERS_API_URL, {
       method: "POST",
       mode: "cors",
@@ -340,12 +409,27 @@ export async function appendOrderToSheet(orderData) {
     return { ok: true };
   }
 
+  const legacyFormSuccess = await tryRequest("POST form(legacy)", () =>
+    fetch(ORDERS_API_URL, {
+      method: "POST",
+      mode: "cors",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+      },
+      body: legacyFormPayload.toString(),
+    })
+  );
+
+  if (legacyFormSuccess) {
+    return { ok: true };
+  }
+
   const url = new URL(ORDERS_API_URL);
-  Object.entries(legacyPayloadData).forEach(([key, value]) => {
+  Object.entries(payloadData).forEach(([key, value]) => {
     url.searchParams.set(key, value);
   });
 
-  const getSuccess = await tryRequest(() =>
+  const getSuccess = await tryRequest("GET query(action)", () =>
     fetch(url.toString(), {
       method: "GET",
       mode: "cors",
@@ -356,18 +440,7 @@ export async function appendOrderToSheet(orderData) {
     return { ok: true };
   }
 
-  // Final fallback for Apps Script deployments that don't send CORS headers.
-  // This is fire-and-forget: response is opaque, but request is usually delivered.
-  await fetch(ORDERS_API_URL, {
-    method: "POST",
-    mode: "no-cors",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-    },
-    body: legacyFormPayload.toString(),
-  });
-
-  return { ok: true, uncertain: true };
+  throw new Error(`Unable to write order to Sheets: ${requestAttempts.join(" | ")}`);
 }
 
 const parseTrackPayload = (payload, requestedOrderId) => {

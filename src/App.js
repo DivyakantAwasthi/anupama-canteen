@@ -25,7 +25,6 @@ const DEFAULT_CATEGORY = "Popular";
 const ALL_CATEGORIES = "All";
 const PREPARING_START_MS = 20000;
 const READY_START_MS = 50000;
-const ORDER_COUNTER_KEY_PREFIX = "anupama:orderCounter:";
 const ORDERS_STORAGE_KEY_PREFIX = "anupama:orders:";
 const WHATSAPP_SENT_KEY_PREFIX = "anupama:whatsappSent:";
 
@@ -46,7 +45,6 @@ const getTodayDateKey = () => {
   return `${year}-${month}-${day}`;
 };
 
-const getCounterKey = (dateKey) => `${ORDER_COUNTER_KEY_PREFIX}${dateKey}`;
 const getOrdersKey = (dateKey) => `${ORDERS_STORAGE_KEY_PREFIX}${dateKey}`;
 const getWhatsAppSentKey = (orderDateKey, orderId, status) =>
   `${WHATSAPP_SENT_KEY_PREFIX}${orderDateKey}:${orderId}:${status}`;
@@ -65,6 +63,20 @@ const writeOrdersForDate = (dateKey, records) => {
   localStorage.setItem(getOrdersKey(dateKey), JSON.stringify(records));
 };
 
+const generateFreshOrderId = (dateKey) => {
+  const existing = new Set(
+    readOrdersForDate(dateKey).map((record) => Number(record.orderId))
+  );
+
+  let candidate = 0;
+  do {
+    const randomSuffix = Math.floor(Math.random() * 900) + 100;
+    candidate = Number(`${Date.now()}${randomSuffix}`);
+  } while (existing.has(candidate));
+
+  return candidate;
+};
+
 const upsertOrderForDate = (dateKey, orderRecord) => {
   const records = readOrdersForDate(dateKey);
   const index = records.findIndex((record) => record.orderId === orderRecord.orderId);
@@ -76,14 +88,6 @@ const upsertOrderForDate = (dateKey, orderRecord) => {
   }
 
   writeOrdersForDate(dateKey, records);
-};
-
-const getNextDailyOrderId = (dateKey) => {
-  const counterKey = getCounterKey(dateKey);
-  const current = Number(localStorage.getItem(counterKey) || 0);
-  const next = Number.isFinite(current) ? current + 1 : 1;
-  localStorage.setItem(counterKey, String(next));
-  return next;
 };
 
 const deriveStatus = (orderRecord, nowMs) => {
@@ -486,7 +490,7 @@ function App() {
     setCheckoutError("");
 
     const todayKey = getTodayDateKey();
-    const orderId = getNextDailyOrderId(todayKey);
+    const orderId = generateFreshOrderId(todayKey);
     const createdAt = new Date().toISOString();
     const items = cartItems.map((item) => `${item.name} x${item.quantity || 1}`).join(", ");
 
