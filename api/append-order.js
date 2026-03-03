@@ -80,7 +80,7 @@ module.exports = async (req, res) => {
     return res.status(405).json({ error: "method_not_allowed" });
   }
 
-  const ORDERS_API_URL = process.env.ORDERS_API_URL;
+  const ORDERS_API_URL = String(process.env.ORDERS_API_URL || "").trim();
   if (!ORDERS_API_URL) {
     return res.status(500).json({ error: "ORDERS_API_URL_not_configured" });
   }
