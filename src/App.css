@@ -157,6 +157,7 @@ body, input, button, select {
 .brand-logo {
   width: 56px;
   height: 56px;
+  object-fit: contain;
   border-radius: 14px;
   box-shadow: 0 8px 24px rgba(6, 95, 70, 0.18);
   flex-shrink: 0;
@@ -1346,15 +1347,16 @@ select {
   opacity: 0.85;
 }
 
-.brand-logo {
+.brand-strip-logo {
   height: 32px;
   width: auto;
+  max-width: 96px;
   object-fit: contain;
   filter: grayscale(100%);
   transition: all 0.25s ease;
 }
 
-.brand-logo:hover {
+.brand-strip-logo:hover {
   filter: grayscale(0%);
   transform: scale(1.12);
 }
