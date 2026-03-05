@@ -43,6 +43,24 @@ function Confirmation({ order, onConfirmPayment, onNewOrder }) {
   )}&pn=${encodeURIComponent(payeeName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(
     note
   )}`;
+  const encodedUpiPath = qrValue.replace(/^upi:\/\//, "");
+  const gpayIntentUrl = `intent://${encodedUpiPath}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`;
+  const paytmIntentUrl = `intent://${encodedUpiPath}#Intent;scheme=upi;package=net.one97.paytm;end`;
+
+  const openPaymentApp = (target) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const isAndroid = /android/i.test(window.navigator.userAgent || "");
+    const urlByTarget = {
+      any: qrValue,
+      gpay: isAndroid ? gpayIntentUrl : qrValue,
+      paytm: isAndroid ? paytmIntentUrl : qrValue,
+    };
+
+    window.location.href = urlByTarget[target] || qrValue;
+  };
 
   if (!order) {
     return null;
@@ -81,6 +99,25 @@ function Confirmation({ order, onConfirmPayment, onNewOrder }) {
             <QRCodeCanvas value={qrValue} size={220} includeMargin />
           </div>
           <p className="muted-text">Scan to pay via UPI</p>
+          <div className="payment-app-actions">
+            <button type="button" onClick={() => openPaymentApp("any")}>
+              Open Payment App
+            </button>
+            <button
+              type="button"
+              className="secondary-btn"
+              onClick={() => openPaymentApp("gpay")}
+            >
+              Google Pay
+            </button>
+            <button
+              type="button"
+              className="secondary-btn"
+              onClick={() => openPaymentApp("paytm")}
+            >
+              Paytm
+            </button>
+          </div>
           <p className="muted-text">
             <strong>UPI ID:</strong> {upiId}
           </p>

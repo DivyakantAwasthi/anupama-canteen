@@ -1245,6 +1245,18 @@ button:disabled {
   border-radius: 12px;
 }
 
+.payment-app-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 10px 0 6px;
+}
+
+.payment-app-actions button {
+  min-width: 128px;
+}
+
 .muted-text {
   color: var(--muted);
 }
