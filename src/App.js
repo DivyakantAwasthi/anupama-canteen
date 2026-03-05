@@ -26,6 +26,7 @@ const ALL_CATEGORIES = "All";
 const PREPARING_START_MS = 20000;
 const READY_START_MS = 50000;
 const ORDERS_STORAGE_KEY_PREFIX = "anupama:orders:";
+const ORDER_COUNTER_KEY_PREFIX = "anupama:orderCounter:";
 const WHATSAPP_SENT_KEY_PREFIX = "anupama:whatsappSent:";
 
 const STATUS_TEXT = {
@@ -46,6 +47,7 @@ const getTodayDateKey = () => {
 };
 
 const getOrdersKey = (dateKey) => `${ORDERS_STORAGE_KEY_PREFIX}${dateKey}`;
+const getOrderCounterKey = (dateKey) => `${ORDER_COUNTER_KEY_PREFIX}${dateKey}`;
 const getWhatsAppSentKey = (orderDateKey, orderId, status) =>
   `${WHATSAPP_SENT_KEY_PREFIX}${orderDateKey}:${orderId}:${status}`;
 
@@ -64,17 +66,20 @@ const writeOrdersForDate = (dateKey, records) => {
 };
 
 const generateFreshOrderId = (dateKey) => {
-  const existing = new Set(
-    readOrdersForDate(dateKey).map((record) => Number(record.orderId))
-  );
+  const localMax = readOrdersForDate(dateKey).reduce((maxId, record) => {
+    const id = Number(record?.orderId);
+    return Number.isInteger(id) && id > maxId ? id : maxId;
+  }, 0);
 
-  let candidate = 0;
-  do {
-    const randomSuffix = Math.floor(Math.random() * 900) + 100;
-    candidate = Number(`${Date.now()}${randomSuffix}`);
-  } while (existing.has(candidate));
-
-  return candidate;
+  try {
+    const counterKey = getOrderCounterKey(dateKey);
+    const stored = Number(localStorage.getItem(counterKey) || 0);
+    const next = Math.max(localMax, Number.isInteger(stored) ? stored : 0) + 1;
+    localStorage.setItem(counterKey, String(next));
+    return next;
+  } catch {
+    return localMax + 1;
+  }
 };
 
 const upsertOrderForDate = (dateKey, orderRecord) => {
