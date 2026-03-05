@@ -5,6 +5,7 @@
     { "src": "api/**/*.js", "use": "@vercel/node" }
   ],
   "routes": [
+    { "src": "/api/menu", "dest": "/api/menu.js", "methods": ["GET"] },
     { "src": "/append-order", "dest": "/api/append-order.js", "methods": ["POST"] },
     { "src": "/payment-confirmed", "dest": "/api/payment-confirmed.js", "methods": ["POST"] },
     { "src": "/(.*)", "dest": "/$1" }

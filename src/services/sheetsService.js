@@ -1,5 +1,5 @@
 const ORDERS_API_URL = process.env.REACT_APP_ORDERS_API_URL;
-const MENU_API_URL = process.env.REACT_APP_MENU_API_URL || ORDERS_API_URL;
+const MENU_API_URL = process.env.REACT_APP_MENU_API_URL || "/api/menu";
 const APPEND_ORDER_ENDPOINT =
   process.env.REACT_APP_APPEND_ORDER_ENDPOINT || "/append-order";
 const DEFAULT_MENU_IMAGE = "/menu-placeholder.svg";
@@ -142,8 +142,14 @@ export async function fetchActiveMenuItems() {
     throw new Error("Set REACT_APP_MENU_API_URL or REACT_APP_ORDERS_API_URL in .env");
   }
 
-  const menuUrl = new URL(MENU_API_URL);
-  menuUrl.searchParams.set("action", "menu");
+  const menuUrl = new URL(
+    MENU_API_URL,
+    typeof window !== "undefined" ? window.location.origin : "http://localhost"
+  );
+  const isVercelProxy = menuUrl.pathname === "/api/menu";
+  if (!isVercelProxy) {
+    menuUrl.searchParams.set("action", "menu");
+  }
 
   const response = await fetch(menuUrl.toString(), {
     method: "GET",
