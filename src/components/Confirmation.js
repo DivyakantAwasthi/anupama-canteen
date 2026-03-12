@@ -45,28 +45,39 @@ function Confirmation({
 
   const amount = (order?.total || 0).toFixed(2);
   const note = `Order ${order?.orderId || "-"}`;
-  const qrValue = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(
-    payeeName
-  )}&am=${amount}&cu=INR&tn=${encodeURIComponent(
+  const upiQuery = `pa=${upiId}&pn=${encodeURIComponent(payeeName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(
     note
   )}`;
+  const qrValue = `upi://pay?${upiQuery}`;
   const encodedUpiPath = qrValue.replace(/^upi:\/\//, "");
   const gpayIntentUrl = `intent://${encodedUpiPath}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`;
   const paytmIntentUrl = `intent://${encodedUpiPath}#Intent;scheme=upi;package=net.one97.paytm;end`;
+  const gpayIosUrl = `gpay://upi/pay?${upiQuery}`;
+  const paytmIosUrl = `paytmmp://upi/pay?${upiQuery}`;
 
   const openPaymentApp = (target) => {
     if (typeof window === "undefined") {
       return;
     }
 
+    const isIOS = /iphone|ipad|ipod/i.test(window.navigator.userAgent || "");
     const isAndroid = /android/i.test(window.navigator.userAgent || "");
     const urlByTarget = {
       any: qrValue,
-      gpay: isAndroid ? gpayIntentUrl : qrValue,
-      paytm: isAndroid ? paytmIntentUrl : qrValue,
+      gpay: isAndroid ? gpayIntentUrl : isIOS ? gpayIosUrl : qrValue,
+      paytm: isAndroid ? paytmIntentUrl : isIOS ? paytmIosUrl : qrValue,
     };
 
     window.location.href = urlByTarget[target] || qrValue;
+
+    // iOS Safari may refuse custom schemes if app isn't installed; fallback to generic UPI.
+    if (isIOS && ["gpay", "paytm"].includes(target)) {
+      setTimeout(() => {
+        if (!document.hidden) {
+          window.location.href = qrValue;
+        }
+      }, 900);
+    }
   };
 
   if (!order) {
