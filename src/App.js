@@ -61,6 +61,35 @@ const readOrdersForDate = (dateKey) => {
   }
 };
 
+const findLocalOrderById = (targetOrderId) => {
+  try {
+    for (const key of Object.keys(localStorage)) {
+      if (!key.startsWith(ORDERS_STORAGE_KEY_PREFIX)) {
+        continue;
+      }
+
+      const raw = localStorage.getItem(key);
+      if (!raw) {
+        continue;
+      }
+
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        continue;
+      }
+
+      const match = parsed.find((record) => Number(record?.orderId) === Number(targetOrderId));
+      if (match) {
+        return match;
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+};
+
 const writeOrdersForDate = (dateKey, records) => {
   localStorage.setItem(getOrdersKey(dateKey), JSON.stringify(records));
 };
@@ -813,7 +842,6 @@ function App() {
 
     try {
       const remoteOrder = await fetchOrderStatusFromSheet({
-        orderDateKey: todayKey,
         orderId: parsedId,
       });
 
@@ -828,8 +856,7 @@ function App() {
       // fallback to local cache
     }
 
-    const todayOrders = readOrdersForDate(todayKey);
-    const localOrder = todayOrders.find((record) => Number(record.orderId) === parsedId);
+    const localOrder = findLocalOrderById(parsedId);
 
     if (localOrder) {
       setTrackedOrder(localOrder);
@@ -837,7 +864,7 @@ function App() {
     }
 
     setTrackedOrder(null);
-    setTrackingError(`Order #${parsedId} not found for ${todayKey}.`);
+    setTrackingError(`Order #${parsedId} not found.`);
   };
 
   const startNewOrder = () => {
@@ -920,8 +947,8 @@ function App() {
           />
           <section className="panel track-panel">
             <div className="panel-head">
-              <h2>Track Today's Order</h2>
-              <span className="panel-label">{getTodayDateKey()}</span>
+              <h2>Track Your Order</h2>
+              <span className="panel-label">By Order ID</span>
             </div>
             <div className="track-form">
               <input
@@ -949,6 +976,9 @@ function App() {
                 </p>
                 <p>
                   <strong>Total:</strong> Rs. {Number(liveTrackedOrder.total).toFixed(2)}
+                </p>
+                <p>
+                  <strong>Date:</strong> {liveTrackedOrder.orderDateKey || "Not available"}
                 </p>
               </div>
             ) : null}
