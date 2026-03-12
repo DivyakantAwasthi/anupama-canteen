@@ -15,6 +15,10 @@ function Menu({
   isLoading,
   error,
   onRetry,
+  quickPickIds,
+  mostOrderedToday,
+  frequentlyBoughtTogether,
+  onAddBundle,
 }) {
   const [quantities, setQuantities] = useState({});
   const getSelectedQty = (id) => quantities[id] || 1;
@@ -79,7 +83,50 @@ function Menu({
             </button>
           ))}
         </div>
+        <p className="menu-tip">Tip: choose a Quick Pick for faster decisions.</p>
       </div>
+
+      {mostOrderedToday?.length ? (
+        <div className="insight-panel">
+          <div className="insight-head">
+            <h3>Most Ordered Today</h3>
+            <span className="insight-note">Live social proof</span>
+          </div>
+          <div className="top-ordered-list">
+            {mostOrderedToday.map((entry) => (
+              <div className="top-ordered-chip" key={entry.item.id}>
+                <strong>{entry.item.name}</strong>
+                <span>{entry.count} sold</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {frequentlyBoughtTogether?.length ? (
+        <div className="insight-panel">
+          <div className="insight-head">
+            <h3>Frequently Bought Together</h3>
+            <span className="insight-note">Save ordering time</span>
+          </div>
+          <div className="bundle-grid">
+            {frequentlyBoughtTogether.map((bundle) => (
+              <article className="bundle-card" key={bundle.id}>
+                <p className="bundle-title">
+                  {bundle.left.name} + {bundle.right.name}
+                </p>
+                <p className="bundle-meta">
+                  Rs. {bundle.totalPrice.toFixed(2)}
+                  {bundle.count ? ` | Ordered together ${bundle.count} times today` : " | Suggested combo"}
+                </p>
+                <button type="button" onClick={() => onAddBundle(bundle)}>
+                  Add Bundle
+                </button>
+              </article>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {!snacks.length ? (
         <div className="empty-state">
@@ -92,6 +139,9 @@ function Menu({
         <div className="menu-grid">
           {snacks.map((snack) => (
             <article className="menu-card" key={snack.id}>
+              {quickPickIds?.has(String(snack.id)) ? (
+                <span className="quick-pick-badge">Quick Pick</span>
+              ) : null}
               <img
                 src={snack.image || FALLBACK_IMAGE}
                 alt={snack.name}

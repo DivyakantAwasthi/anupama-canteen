@@ -149,6 +149,32 @@ const toCategoryLabel = (value, name) => {
   return DEFAULT_CATEGORY;
 };
 
+const normalizeItemName = (value) =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+
+const parseOrderItems = (value) => {
+  const rawText = String(value || "").trim();
+  if (!rawText) {
+    return [];
+  }
+
+  return rawText
+    .split(/\s*,\s*/)
+    .map((part) => {
+      const match = part.match(/^(.*?)(?:\s*x\s*(\d+))?$/i);
+      const name = normalizeItemName(match?.[1] || part);
+      const qty = Number(match?.[2] || 1);
+      return {
+        name,
+        qty: Number.isInteger(qty) && qty > 0 ? qty : 1,
+      };
+    })
+    .filter((entry) => entry.name);
+};
+
 const BrandStrip = () => {
   const brands = [
     amul,
@@ -161,10 +187,10 @@ const BrandStrip = () => {
     nestle,
     veeba,
     "/brands/kissan.png",
-    "/brands/knorr.png",
+    "/brands/knorr.svg",
     "/brands/everest.png",
-    "/brands/mtr.png",
-    "/brands/chings.svg",
+    "/brands/mtr.svg",
+    "/brands/chings.png",
   ];
 
   return (
@@ -196,6 +222,8 @@ function App() {
   const [trackOrderIdInput, setTrackOrderIdInput] = useState("");
   const [trackedOrder, setTrackedOrder] = useState(null);
   const [trackingError, setTrackingError] = useState("");
+  const [ordersRefreshKey, setOrdersRefreshKey] = useState(0);
+  const [todayOrders, setTodayOrders] = useState([]);
 
   const totalPrice = useMemo(
     () => cartItems.reduce((sum, item) => sum + item.price, 0),
@@ -230,6 +258,123 @@ function App() {
       return categoryMatch && searchMatch;
     });
   }, [menuItemsWithCategory, activeCategory, searchQuery]);
+
+  const quickPickIds = useMemo(() => {
+    const picks = [...menuItemsWithCategory]
+      .sort((a, b) => Number(a.price) - Number(b.price))
+      .slice(0, 3)
+      .map((item) => String(item.id));
+    return new Set(picks);
+  }, [menuItemsWithCategory]);
+
+  const estimatedPrepMinutes = useMemo(() => {
+    if (!cartItems.length) {
+      return 10;
+    }
+    return Math.min(25, 8 + cartItems.length * 2);
+  }, [cartItems.length]);
+
+  useEffect(() => {
+    setTodayOrders(readOrdersForDate(getTodayDateKey()));
+  }, [ordersRefreshKey]);
+
+  const mostOrderedToday = useMemo(() => {
+    const menuByName = new Map(
+      menuItemsWithCategory.map((item) => [normalizeItemName(item.name), item])
+    );
+    const itemCounts = new Map();
+
+    todayOrders.forEach((order) => {
+      parseOrderItems(order?.items).forEach((entry) => {
+        const menuItem = menuByName.get(entry.name);
+        if (!menuItem) {
+          return;
+        }
+        const current = itemCounts.get(menuItem.id) || {
+          item: menuItem,
+          count: 0,
+        };
+        current.count += entry.qty;
+        itemCounts.set(menuItem.id, current);
+      });
+    });
+
+    return [...itemCounts.values()]
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 4);
+  }, [todayOrders, menuItemsWithCategory]);
+
+  const frequentlyBoughtTogether = useMemo(() => {
+    const menuByName = new Map(
+      menuItemsWithCategory.map((item) => [normalizeItemName(item.name), item])
+    );
+    const pairCounts = new Map();
+
+    todayOrders.forEach((order) => {
+      const uniqueIds = new Set();
+      parseOrderItems(order?.items).forEach((entry) => {
+        const menuItem = menuByName.get(entry.name);
+        if (menuItem?.id !== undefined && menuItem?.id !== null) {
+          uniqueIds.add(String(menuItem.id));
+        }
+      });
+
+      const ids = [...uniqueIds];
+      for (let i = 0; i < ids.length; i += 1) {
+        for (let j = i + 1; j < ids.length; j += 1) {
+          const [a, b] = [ids[i], ids[j]].sort();
+          const key = `${a}::${b}`;
+          pairCounts.set(key, (pairCounts.get(key) || 0) + 1);
+        }
+      }
+    });
+
+    const byId = new Map(menuItemsWithCategory.map((item) => [String(item.id), item]));
+    const rankedPairs = [...pairCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([key, count]) => {
+        const [leftId, rightId] = key.split("::");
+        const left = byId.get(leftId);
+        const right = byId.get(rightId);
+        if (!left || !right) {
+          return null;
+        }
+        return {
+          id: key,
+          left,
+          right,
+          count,
+          totalPrice: Number(left.price) + Number(right.price),
+        };
+      })
+      .filter(Boolean);
+
+    if (rankedPairs.length) {
+      return rankedPairs.slice(0, 3);
+    }
+
+    const fallback = [...menuItemsWithCategory]
+      .sort((a, b) => Number(a.price) - Number(b.price))
+      .slice(0, 4);
+
+    if (fallback.length < 2) {
+      return [];
+    }
+
+    const fallbackPairs = [];
+    for (let i = 0; i < fallback.length - 1 && fallbackPairs.length < 2; i += 1) {
+      const left = fallback[i];
+      const right = fallback[i + 1];
+      fallbackPairs.push({
+        id: `${left.id}::${right.id}`,
+        left,
+        right,
+        count: 0,
+        totalPrice: Number(left.price) + Number(right.price),
+      });
+    }
+    return fallbackPairs;
+  }, [todayOrders, menuItemsWithCategory]);
 
   const currentOrder = useMemo(() => {
     if (!orderDetails) {
@@ -362,6 +507,7 @@ function App() {
           };
 
           upsertOrderForDate(prev.orderDateKey, merged);
+          setOrdersRefreshKey((key) => key + 1);
           return merged;
         });
       } catch {
@@ -437,6 +583,31 @@ function App() {
 
   const addToCart = (item) => {
     setCartItems((prev) => [...prev, item]);
+  };
+
+  const addBundleToCart = (bundle) => {
+    if (!bundle?.left || !bundle?.right) {
+      return;
+    }
+
+    const leftPrice = Number(bundle.left.price);
+    const rightPrice = Number(bundle.right.price);
+
+    setCartItems((prev) => [
+      ...prev,
+      {
+        ...bundle.left,
+        quantity: 1,
+        unitPrice: leftPrice,
+        price: leftPrice,
+      },
+      {
+        ...bundle.right,
+        quantity: 1,
+        unitPrice: rightPrice,
+        price: rightPrice,
+      },
+    ]);
   };
 
   const removeFromCart = (indexToRemove) => {
@@ -516,6 +687,7 @@ function App() {
     };
 
     upsertOrderForDate(todayKey, newOrder);
+    setOrdersRefreshKey((key) => key + 1);
     setOrderDetails(newOrder);
     notifyWhatsAppForStatus(newOrder, "order_placed");
     setCartItems([]);
@@ -551,6 +723,7 @@ function App() {
       });
 
       upsertOrderForDate(updatedOrder.orderDateKey, updatedOrder);
+      setOrdersRefreshKey((key) => key + 1);
       setOrderDetails(updatedOrder);
     } catch (error) {
       setOrderDetails((prev) => ({
@@ -643,6 +816,14 @@ function App() {
           </div>
         </div>
       </header>
+      <section className="decision-banner">
+        <p className="decision-title">Why customers order here</p>
+        <div className="decision-points">
+          <span>Pickup in around {estimatedPrepMinutes} mins</span>
+          <span>Live status on WhatsApp</span>
+          <span>Simple UPI checkout</span>
+        </div>
+      </section>
       <main className="main-layout">
         <Menu
           snacks={filteredMenuItems}
@@ -660,6 +841,10 @@ function App() {
           isLoading={isMenuLoading}
           error={menuError}
           onRetry={() => loadMenu()}
+          quickPickIds={quickPickIds}
+          mostOrderedToday={mostOrderedToday}
+          frequentlyBoughtTogether={frequentlyBoughtTogether}
+          onAddBundle={addBundleToCart}
         />
         <div className="sidebar-stack">
           <Cart
@@ -669,6 +854,7 @@ function App() {
             onCheckout={openCheckoutModal}
             isSavingOrder={isSavingOrder}
             error={checkoutError}
+            estimatedPrepMinutes={estimatedPrepMinutes}
           />
           <section className="panel track-panel">
             <div className="panel-head">

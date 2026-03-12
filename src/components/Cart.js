@@ -1,9 +1,21 @@
-function Cart({ items, total, onRemove, onCheckout, isSavingOrder, error }) {
+function Cart({
+  items,
+  total,
+  onRemove,
+  onCheckout,
+  isSavingOrder,
+  error,
+  estimatedPrepMinutes,
+}) {
+  const totalUnits = items.reduce((sum, item) => sum + (item.quantity || 1), 0);
+
   return (
     <section className="panel cart-panel">
       <div className="panel-head">
         <h2>Your Cart</h2>
-        <span className="panel-label">{items.length} items</span>
+        <span className="panel-label">
+          {items.length} items | {totalUnits} qty
+        </span>
       </div>
 
       {items.length === 0 ? (
@@ -34,7 +46,12 @@ function Cart({ items, total, onRemove, onCheckout, isSavingOrder, error }) {
       )}
 
       <div className="cart-footer">
-        <h3>Total: Rs. {total.toFixed(2)}</h3>
+        <div>
+          <h3>Total: Rs. {total.toFixed(2)}</h3>
+          <p className="cart-nudge">
+            Estimated prep: {estimatedPrepMinutes || 10} mins after payment
+          </p>
+        </div>
         <button
           type="button"
           onClick={onCheckout}
