@@ -32,7 +32,12 @@ function getStepState(orderStatus, stepId) {
   return "todo";
 }
 
-function Confirmation({ order, onConfirmPayment, onNewOrder }) {
+function Confirmation({
+  order,
+  onConfirmPayment,
+  onSelectCashAtCounter,
+  onNewOrder,
+}) {
   const upiId = String(process.env.REACT_APP_UPI_ID || "9807980222@ptsbi")
     .trim()
     .toLowerCase();
@@ -69,6 +74,7 @@ function Confirmation({ order, onConfirmPayment, onNewOrder }) {
   }
 
   const isPaid = Boolean(order.paidAt);
+  const isCashAtCounter = order.paymentMode === "cash_counter";
 
   return (
     <section className="panel confirmation-panel">
@@ -97,32 +103,48 @@ function Confirmation({ order, onConfirmPayment, onNewOrder }) {
 
       {!isPaid ? (
         <>
-          <div className="qr-wrap">
-            <QRCodeCanvas value={qrValue} size={220} includeMargin />
-          </div>
-          <p className="muted-text">Scan to pay via UPI</p>
-          <div className="payment-app-actions">
-            <button type="button" onClick={() => openPaymentApp("any")}>
-              Open Payment App
-            </button>
-            <button
-              type="button"
-              className="secondary-btn"
-              onClick={() => openPaymentApp("gpay")}
-            >
-              Google Pay
-            </button>
-            <button
-              type="button"
-              className="secondary-btn"
-              onClick={() => openPaymentApp("paytm")}
-            >
-              Paytm
-            </button>
-          </div>
-          <p className="muted-text">
-            <strong>UPI ID:</strong> {upiId}
-          </p>
+          {!isCashAtCounter ? (
+            <>
+              <div className="qr-wrap">
+                <QRCodeCanvas value={qrValue} size={220} includeMargin />
+              </div>
+              <p className="muted-text">Scan to pay via UPI</p>
+              <div className="payment-app-actions">
+                <button type="button" onClick={() => openPaymentApp("any")}>
+                  Open Payment App
+                </button>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={() => openPaymentApp("gpay")}
+                >
+                  Google Pay
+                </button>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={() => openPaymentApp("paytm")}
+                >
+                  Paytm
+                </button>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={onSelectCashAtCounter}
+                  disabled={order.saving}
+                >
+                  Cash at Counter
+                </button>
+              </div>
+              <p className="muted-text">
+                <strong>UPI ID:</strong> {upiId}
+              </p>
+            </>
+          ) : (
+            <p className="muted-text">
+              Cash at counter selected. Please pay at pickup counter to continue order processing.
+            </p>
+          )}
         </>
       ) : null}
 

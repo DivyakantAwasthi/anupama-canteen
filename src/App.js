@@ -477,7 +477,11 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!orderDetails?.orderId || !orderDetails?.orderDateKey || !orderDetails?.paidAt) {
+    if (
+      !orderDetails?.orderId ||
+      !orderDetails?.orderDateKey ||
+      (!orderDetails?.paidAt && orderDetails?.paymentMode !== "cash_counter")
+    ) {
       return undefined;
     }
 
@@ -526,7 +530,12 @@ function App() {
       active = false;
       clearInterval(intervalId);
     };
-  }, [orderDetails?.orderId, orderDetails?.orderDateKey, orderDetails?.paidAt]);
+  }, [
+    orderDetails?.orderId,
+    orderDetails?.orderDateKey,
+    orderDetails?.paidAt,
+    orderDetails?.paymentMode,
+  ]);
 
   useEffect(() => {
     if (!trackedOrder?.orderId || !trackedOrder?.orderDateKey) {
@@ -683,6 +692,7 @@ function App() {
       orderDateKey: todayKey,
       createdAt,
       paidAt: null,
+      paymentMode: "upi",
       total: totalPrice,
       customer: {
         name: customer.name.trim(),
@@ -713,6 +723,7 @@ function App() {
     const updatedOrder = {
       ...orderDetails,
       paidAt: nowIso,
+      paymentMode: "upi",
       saving: false,
       error: null,
     };
@@ -740,6 +751,48 @@ function App() {
         error:
           error?.message ||
           "Unable to confirm payment. Check your connection and try again.",
+      }));
+    }
+  };
+
+  const selectCashAtCounter = async () => {
+    if (!orderDetails) {
+      return;
+    }
+
+    setOrderDetails((prev) => ({ ...prev, saving: true, error: null }));
+
+    const nowIso = new Date().toISOString();
+    const updatedOrder = {
+      ...orderDetails,
+      paymentMode: "cash_counter",
+      saving: false,
+      error: null,
+    };
+
+    try {
+      await appendOrderToSheet({
+        orderId: updatedOrder.orderId,
+        orderDateKey: updatedOrder.orderDateKey,
+        customerName: updatedOrder.customer.name,
+        customerEmail: updatedOrder.customer.email,
+        customerPhone: updatedOrder.customer.phone,
+        items: updatedOrder.items,
+        total: updatedOrder.total,
+        timestamp: nowIso,
+        status: "pending_payment",
+      });
+
+      upsertOrderForDate(updatedOrder.orderDateKey, updatedOrder);
+      setOrdersRefreshKey((key) => key + 1);
+      setOrderDetails(updatedOrder);
+    } catch (error) {
+      setOrderDetails((prev) => ({
+        ...prev,
+        saving: false,
+        error:
+          error?.message ||
+          "Unable to register cash-at-counter option. Check your connection and try again.",
       }));
     }
   };
@@ -807,6 +860,7 @@ function App() {
         <Confirmation
           order={currentOrder}
           onConfirmPayment={confirmPayment}
+          onSelectCashAtCounter={selectCashAtCounter}
           onNewOrder={startNewOrder}
         />
       </div>
