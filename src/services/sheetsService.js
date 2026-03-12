@@ -138,38 +138,60 @@ function normalizeMenuRow(rawRow, index) {
 }
 
 export async function fetchActiveMenuItems() {
-  if (!hasConfiguredValue(MENU_API_URL)) {
+  const baseOrigin =
+    typeof window !== "undefined" ? window.location.origin : "http://localhost";
+  const attempts = [];
+
+  const readMenuRows = async (rawUrl) => {
+    const menuUrl = new URL(rawUrl, baseOrigin);
+    if (menuUrl.pathname !== "/api/menu") {
+      menuUrl.searchParams.set("action", "menu");
+    }
+
+    const response = await fetch(menuUrl.toString(), {
+      method: "GET",
+      mode: "cors",
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const payload = await response.json();
+    return Array.isArray(payload?.items)
+      ? payload.items
+      : Array.isArray(payload)
+        ? payload
+        : [];
+  };
+
+  const candidates = [];
+  if (hasConfiguredValue(MENU_API_URL)) {
+    candidates.push({ label: "menu_api_url", url: MENU_API_URL });
+  }
+  if (!candidates.some((candidate) => String(candidate.url).trim() === "/api/menu")) {
+    candidates.push({ label: "menu_proxy", url: "/api/menu" });
+  }
+  if (hasConfiguredValue(ORDERS_API_URL)) {
+    candidates.push({ label: "orders_api_url", url: ORDERS_API_URL });
+  }
+
+  if (!candidates.length) {
     throw new Error("Set REACT_APP_MENU_API_URL or REACT_APP_ORDERS_API_URL in .env");
   }
 
-  const menuUrl = new URL(
-    MENU_API_URL,
-    typeof window !== "undefined" ? window.location.origin : "http://localhost"
-  );
-  const isVercelProxy = menuUrl.pathname === "/api/menu";
-  if (!isVercelProxy) {
-    menuUrl.searchParams.set("action", "menu");
+  for (const candidate of candidates) {
+    try {
+      const rows = await readMenuRows(candidate.url);
+      return rows
+        .map((row, index) => normalizeMenuRow(row, index))
+        .filter((row) => row && row.active);
+    } catch (error) {
+      attempts.push(`${candidate.label}: ${error?.message || "failed"}`);
+    }
   }
 
-  const response = await fetch(menuUrl.toString(), {
-    method: "GET",
-    mode: "cors",
-  });
-
-  if (!response.ok) {
-    throw new Error("Unable to fetch menu items from API");
-  }
-
-  const payload = await response.json();
-  const rows = Array.isArray(payload?.items)
-    ? payload.items
-    : Array.isArray(payload)
-      ? payload
-      : [];
-
-  return rows
-    .map((row, index) => normalizeMenuRow(row, index))
-    .filter((row) => row && row.active);
+  throw new Error(`Unable to fetch menu items from API. ${attempts.join(" | ")}`);
 }
 
 const buildOrderPayload = ({
