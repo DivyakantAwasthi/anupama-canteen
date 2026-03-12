@@ -477,7 +477,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!orderDetails?.orderId || !orderDetails?.orderDateKey) {
+    if (!orderDetails?.orderId || !orderDetails?.orderDateKey || !orderDetails?.paidAt) {
       return undefined;
     }
 
@@ -490,7 +490,11 @@ function App() {
           orderId: orderDetails.orderId,
         });
 
-        if (!active || !remoteOrder) {
+        if (
+          !active ||
+          !remoteOrder ||
+          Number(remoteOrder.orderId) !== Number(orderDetails.orderId)
+        ) {
           return;
         }
 
@@ -522,7 +526,7 @@ function App() {
       active = false;
       clearInterval(intervalId);
     };
-  }, [orderDetails?.orderId, orderDetails?.orderDateKey]);
+  }, [orderDetails?.orderId, orderDetails?.orderDateKey, orderDetails?.paidAt]);
 
   useEffect(() => {
     if (!trackedOrder?.orderId || !trackedOrder?.orderDateKey) {
@@ -538,7 +542,11 @@ function App() {
           orderId: trackedOrder.orderId,
         });
 
-        if (!active || !remoteOrder) {
+        if (
+          !active ||
+          !remoteOrder ||
+          Number(remoteOrder.orderId) !== Number(trackedOrder.orderId)
+        ) {
           return;
         }
 

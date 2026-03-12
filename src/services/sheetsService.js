@@ -475,10 +475,13 @@ const parseTrackPayload = (payload, requestedOrderId) => {
     return null;
   }
 
-  return (
-    normalized.find((item) => Number(item.orderId) === Number(requestedOrderId)) ||
-    normalized[0]
-  );
+  if (requestedOrderId !== undefined && requestedOrderId !== null && requestedOrderId !== "") {
+    return (
+      normalized.find((item) => Number(item.orderId) === Number(requestedOrderId)) || null
+    );
+  }
+
+  return normalized[0];
 };
 
 export async function fetchOrderStatusFromSheet({ orderDateKey, orderId }) {
