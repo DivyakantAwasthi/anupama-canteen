@@ -33,14 +33,16 @@ function getStepState(orderStatus, stepId) {
 }
 
 function Confirmation({ order, onConfirmPayment, onNewOrder }) {
-  const upiId = process.env.REACT_APP_UPI_ID || "9807980222@ptsbi";
+  const upiId = String(process.env.REACT_APP_UPI_ID || "9807980222@ptsbi")
+    .trim()
+    .toLowerCase();
   const payeeName = process.env.REACT_APP_UPI_PAYEE_NAME || "Utkarsh Shukla";
 
   const amount = (order?.total || 0).toFixed(2);
   const note = `Order ${order?.orderId || "-"}`;
-  const qrValue = `upi://pay?pa=${encodeURIComponent(
-    upiId
-  )}&pn=${encodeURIComponent(payeeName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(
+  const qrValue = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(
+    payeeName
+  )}&am=${amount}&cu=INR&tn=${encodeURIComponent(
     note
   )}`;
   const encodedUpiPath = qrValue.replace(/^upi:\/\//, "");
