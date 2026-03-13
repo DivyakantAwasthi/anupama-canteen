@@ -124,6 +124,17 @@ const upsertOrderForDate = (dateKey, orderRecord) => {
   writeOrdersForDate(dateKey, records);
 };
 
+const replaceOrderRecordForDate = (dateKey, previousOrderId, nextOrderRecord) => {
+  const records = readOrdersForDate(dateKey).filter(
+    (record) =>
+      Number(record?.orderId) !== Number(previousOrderId) &&
+      Number(record?.orderId) !== Number(nextOrderRecord?.orderId)
+  );
+
+  records.push(nextOrderRecord);
+  writeOrdersForDate(dateKey, records);
+};
+
 const deriveStatus = (orderRecord, nowMs) => {
   if (orderRecord?.sheetStatus) {
     return orderRecord.sheetStatus;
@@ -242,6 +253,7 @@ function App() {
   const [checkoutError, setCheckoutError] = useState("");
   const [orderDetails, setOrderDetails] = useState(null);
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+  const [isFloatingCartOpen, setIsFloatingCartOpen] = useState(false);
   const [customer, setCustomer] = useState({
     name: "",
     email: "",
@@ -302,6 +314,11 @@ function App() {
     }
     return Math.min(25, 8 + cartItems.length * 2);
   }, [cartItems.length]);
+
+  const cartUnitCount = useMemo(
+    () => cartItems.reduce((sum, item) => sum + (item.quantity || 1), 0),
+    [cartItems]
+  );
 
   useEffect(() => {
     setTodayOrders(readOrdersForDate(getTodayDateKey()));
@@ -666,6 +683,7 @@ function App() {
     }
 
     setCheckoutError("");
+    setIsFloatingCartOpen(false);
     setIsCheckoutModalOpen(true);
   };
 
@@ -675,6 +693,10 @@ function App() {
     }
 
     setIsCheckoutModalOpen(false);
+  };
+
+  const toggleFloatingCart = () => {
+    setIsFloatingCartOpen((prev) => !prev);
   };
 
   const onCustomerFieldChange = (event) => {
@@ -758,7 +780,7 @@ function App() {
     };
 
     try {
-      await appendOrderToSheet({
+      const appendResult = await appendOrderToSheet({
         orderId: updatedOrder.orderId,
         orderDateKey: updatedOrder.orderDateKey,
         customerName: updatedOrder.customer.name,
@@ -769,10 +791,23 @@ function App() {
         timestamp: nowIso,
         status: "payment_verified",
       });
+      const canonicalOrderId = Number(appendResult?.orderId);
+      const mergedOrder =
+        Number.isInteger(canonicalOrderId) && canonicalOrderId > 0
+          ? { ...updatedOrder, orderId: canonicalOrderId }
+          : updatedOrder;
 
-      upsertOrderForDate(updatedOrder.orderDateKey, updatedOrder);
+      if (mergedOrder.orderId !== updatedOrder.orderId) {
+        replaceOrderRecordForDate(
+          mergedOrder.orderDateKey,
+          updatedOrder.orderId,
+          mergedOrder
+        );
+      } else {
+        upsertOrderForDate(mergedOrder.orderDateKey, mergedOrder);
+      }
       setOrdersRefreshKey((key) => key + 1);
-      setOrderDetails(updatedOrder);
+      setOrderDetails(mergedOrder);
     } catch (error) {
       setOrderDetails((prev) => ({
         ...prev,
@@ -800,7 +835,7 @@ function App() {
     };
 
     try {
-      await appendOrderToSheet({
+      const appendResult = await appendOrderToSheet({
         orderId: updatedOrder.orderId,
         orderDateKey: updatedOrder.orderDateKey,
         customerName: updatedOrder.customer.name,
@@ -811,10 +846,23 @@ function App() {
         timestamp: nowIso,
         status: "pending_payment",
       });
+      const canonicalOrderId = Number(appendResult?.orderId);
+      const mergedOrder =
+        Number.isInteger(canonicalOrderId) && canonicalOrderId > 0
+          ? { ...updatedOrder, orderId: canonicalOrderId }
+          : updatedOrder;
 
-      upsertOrderForDate(updatedOrder.orderDateKey, updatedOrder);
+      if (mergedOrder.orderId !== updatedOrder.orderId) {
+        replaceOrderRecordForDate(
+          mergedOrder.orderDateKey,
+          updatedOrder.orderId,
+          mergedOrder
+        );
+      } else {
+        upsertOrderForDate(mergedOrder.orderDateKey, mergedOrder);
+      }
       setOrdersRefreshKey((key) => key + 1);
-      setOrderDetails(updatedOrder);
+      setOrderDetails(mergedOrder);
     } catch (error) {
       setOrderDetails((prev) => ({
         ...prev,
@@ -936,15 +984,17 @@ function App() {
           onAddBundle={addBundleToCart}
         />
         <div className="sidebar-stack">
-          <Cart
-            items={cartItems}
-            total={totalPrice}
-            onRemove={removeFromCart}
-            onCheckout={openCheckoutModal}
-            isSavingOrder={isSavingOrder}
-            error={checkoutError}
-            estimatedPrepMinutes={estimatedPrepMinutes}
-          />
+          <div className="sidebar-cart-slot">
+            <Cart
+              items={cartItems}
+              total={totalPrice}
+              onRemove={removeFromCart}
+              onCheckout={openCheckoutModal}
+              isSavingOrder={isSavingOrder}
+              error={checkoutError}
+              estimatedPrepMinutes={estimatedPrepMinutes}
+            />
+          </div>
           <section className="panel track-panel">
             <div className="panel-head">
               <h2>Track Your Order</h2>
@@ -987,6 +1037,41 @@ function App() {
       </main>
 
       <BrandStrip />
+
+      <button
+        type="button"
+        className={`floating-cart-btn ${cartItems.length ? "has-items" : ""}`}
+        onClick={toggleFloatingCart}
+        aria-label={cartItems.length ? `Open cart with ${cartUnitCount} items` : "Open empty cart"}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM7.2 14h9.9c.9 0 1.7-.5 2.1-1.3l3.3-6.1a1 1 0 0 0-.9-1.5H6.1L5.4 2H2v2h2l2.5 9.5a2 2 0 0 0 1.9 1.5z" />
+        </svg>
+        <span className="floating-cart-label">Cart</span>
+        <span className="floating-cart-count">{cartUnitCount}</span>
+      </button>
+
+      {isFloatingCartOpen ? (
+        <div className="floating-cart-overlay" role="dialog" aria-modal="true">
+          <div className="floating-cart-panel-wrap">
+            <div className="floating-cart-head">
+              <h2>Cart</h2>
+              <button type="button" className="secondary-btn" onClick={toggleFloatingCart}>
+                Close
+              </button>
+            </div>
+            <Cart
+              items={cartItems}
+              total={totalPrice}
+              onRemove={removeFromCart}
+              onCheckout={openCheckoutModal}
+              isSavingOrder={isSavingOrder}
+              error={checkoutError}
+              estimatedPrepMinutes={estimatedPrepMinutes}
+            />
+          </div>
+        </div>
+      ) : null}
 
       {isCheckoutModalOpen ? (
         <div className="modal-overlay" role="dialog" aria-modal="true">
