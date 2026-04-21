@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600;700;800&display=swap");
 
 html,
 body,
@@ -9,14 +9,14 @@ body,
 
 html {
   background:
-    radial-gradient(circle at 12% 10%, rgba(45, 163, 95, 0.22), transparent 40%),
-    radial-gradient(circle at 88% 90%, rgba(28, 116, 64, 0.15), transparent 45%),
-    linear-gradient(180deg, #eef4ee 0%, #e7f1e8 42%, #ecf5ec 100%);
+    radial-gradient(circle at 12% 10%, rgba(220, 38, 38, 0.08), transparent 40%),
+    radial-gradient(circle at 88% 90%, rgba(234, 88, 12, 0.06), transparent 45%),
+    linear-gradient(180deg, #fff8f5 0%, #fef2f0 42%, #fdf6f0 100%);
 }
 
 body {
-  font-family: "Manrope", "Segoe UI", sans-serif;
+  font-family: "Inter", "Poppins", -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   color: #17221b;
-  line-height: 1.4;
+  line-height: 1.5;
   scroll-behavior: smooth;
 }

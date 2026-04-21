@@ -13,7 +13,7 @@ const STATUS_MESSAGE = {
   payment_verified: "Payment is verified. Your order will move to preparation soon.",
   preparing: "Kitchen is preparing your order now.",
   ready_for_pickup: "Your order is ready. Please collect it at the counter.",
-  delivered: "Your order is delivered. Thank you for ordering.",
+  delivered: "Your order is delivered through Porter app. Thank you for ordering.",
   cancelled: "This order has been cancelled. Contact support if needed.",
 };
 

@@ -343,8 +343,10 @@ const evaluateHttpResult = async (response) => {
       }
 
       if (parsed.ok === true || parsed.success === true) {
-        return { ok: true, detail: "accepted" };
+        return { ok: true, detail: "accepted", payload: parsed };
       }
+
+      return { ok: true, detail: trimmed, payload: parsed };
     }
   } catch {
     // non-JSON response body
@@ -355,6 +357,58 @@ const evaluateHttpResult = async (response) => {
   }
 
   return { ok: true, detail: trimmed };
+};
+
+const toPositiveInt = (value) => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const extractOrderIdFromObject = (source) => {
+  if (!source || typeof source !== "object") {
+    return null;
+  }
+
+  const direct = [
+    source.orderId,
+    source.id,
+    source.order_id,
+    source.orderNumber,
+    source.order_number,
+    source.sheetOrderId,
+    source.sheet_order_id,
+  ];
+
+  for (const candidate of direct) {
+    const parsed = toPositiveInt(candidate);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  const nestedCandidates = [source.order, source.data, source.result];
+  for (const nested of nestedCandidates) {
+    const parsed = extractOrderIdFromObject(nested);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  return null;
+};
+
+const extractOrderIdFromText = (text) => {
+  const raw = String(text || "").trim();
+  if (!raw) {
+    return null;
+  }
+
+  const withLabel = raw.match(/\b(?:order[\s_-]?(?:id|number)?|id)\D+(\d+)\b/i);
+  if (withLabel) {
+    return toPositiveInt(withLabel[1]);
+  }
+
+  return toPositiveInt(raw);
 };
 
 export async function appendOrderToSheet(orderData) {
@@ -373,18 +427,23 @@ export async function appendOrderToSheet(orderData) {
       const response = await requestFn();
       const evaluated = await evaluateHttpResult(response);
       if (evaluated.ok) {
-        return true;
+        const payloadOrderId = extractOrderIdFromObject(evaluated.payload);
+        const detailOrderId = extractOrderIdFromText(evaluated.detail);
+        return {
+          ok: true,
+          orderId: payloadOrderId || detailOrderId || null,
+        };
       }
 
       requestAttempts.push(`${label}: ${evaluated.detail}`.trim());
-      return false;
+      return { ok: false };
     } catch (error) {
       requestAttempts.push(`${label}: ${error?.message || "Network/CORS error"}`);
-      return false;
+      return { ok: false };
     }
   };
 
-  const proxySuccess = await tryRequest("POST append-order proxy", () =>
+  const proxyResult = await tryRequest("POST append-order proxy", () =>
     fetch(APPEND_ORDER_ENDPOINT, {
       method: "POST",
       mode: "cors",
@@ -395,8 +454,8 @@ export async function appendOrderToSheet(orderData) {
     })
   );
 
-  if (proxySuccess) {
-    return { ok: true };
+  if (proxyResult.ok) {
+    return { ok: true, orderId: proxyResult.orderId || toPositiveInt(orderData?.orderId) };
   }
 
   if (!hasConfiguredValue(ORDERS_API_URL)) {
@@ -407,7 +466,7 @@ export async function appendOrderToSheet(orderData) {
     );
   }
 
-  const formSuccess = await tryRequest("POST form(action)", () =>
+  const formResult = await tryRequest("POST form(action)", () =>
     fetch(ORDERS_API_URL, {
       method: "POST",
       mode: "cors",
@@ -418,11 +477,11 @@ export async function appendOrderToSheet(orderData) {
     })
   );
 
-  if (formSuccess) {
-    return { ok: true };
+  if (formResult.ok) {
+    return { ok: true, orderId: formResult.orderId || toPositiveInt(orderData?.orderId) };
   }
 
-  const jsonSuccess = await tryRequest("POST json(action)", () =>
+  const jsonResult = await tryRequest("POST json(action)", () =>
     fetch(ORDERS_API_URL, {
       method: "POST",
       mode: "cors",
@@ -433,11 +492,11 @@ export async function appendOrderToSheet(orderData) {
     })
   );
 
-  if (jsonSuccess) {
-    return { ok: true };
+  if (jsonResult.ok) {
+    return { ok: true, orderId: jsonResult.orderId || toPositiveInt(orderData?.orderId) };
   }
 
-  const legacyFormSuccess = await tryRequest("POST form(legacy)", () =>
+  const legacyFormResult = await tryRequest("POST form(legacy)", () =>
     fetch(ORDERS_API_URL, {
       method: "POST",
       mode: "cors",
@@ -448,8 +507,8 @@ export async function appendOrderToSheet(orderData) {
     })
   );
 
-  if (legacyFormSuccess) {
-    return { ok: true };
+  if (legacyFormResult.ok) {
+    return { ok: true, orderId: legacyFormResult.orderId || toPositiveInt(orderData?.orderId) };
   }
 
   const url = new URL(ORDERS_API_URL);
@@ -457,15 +516,15 @@ export async function appendOrderToSheet(orderData) {
     url.searchParams.set(key, value);
   });
 
-  const getSuccess = await tryRequest("GET query(action)", () =>
+  const getResult = await tryRequest("GET query(action)", () =>
     fetch(url.toString(), {
       method: "GET",
       mode: "cors",
     })
   );
 
-  if (getSuccess) {
-    return { ok: true };
+  if (getResult.ok) {
+    return { ok: true, orderId: getResult.orderId || toPositiveInt(orderData?.orderId) };
   }
 
   throw new Error(`Unable to write order to Sheets: ${requestAttempts.join(" | ")}`);

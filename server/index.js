@@ -51,8 +51,10 @@ const evaluateForwardResponse = async (response) => {
         };
       }
       if (parsed.ok === true || parsed.success === true) {
-        return { ok: true };
+        return { ok: true, payload: parsed };
       }
+
+      return { ok: true, payload: parsed };
     }
   } catch {
     // non-JSON response
@@ -63,6 +65,44 @@ const evaluateForwardResponse = async (response) => {
   }
 
   return { ok: true };
+};
+
+const toPositiveInt = (value) => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const extractOrderIdFromObject = (source) => {
+  if (!source || typeof source !== 'object') {
+    return null;
+  }
+
+  const direct = [
+    source.orderId,
+    source.id,
+    source.order_id,
+    source.orderNumber,
+    source.order_number,
+    source.sheetOrderId,
+    source.sheet_order_id,
+  ];
+
+  for (const candidate of direct) {
+    const parsed = toPositiveInt(candidate);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  const nested = [source.order, source.data, source.result];
+  for (const value of nested) {
+    const parsed = extractOrderIdFromObject(value);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  return null;
 };
 
 if (!ORDERS_API_URL) {
@@ -112,11 +152,17 @@ const forwardOrderToSheets = async (sourceBody) => {
     timestamp: actionPayload.timestamp,
   };
 
+  let canonicalOrderId = null;
+
   const tryForward = async (label, requestFn) => {
     try {
       const resp = await requestFn();
       const evaluated = await evaluateForwardResponse(resp);
       if (evaluated.ok) {
+        const extracted = extractOrderIdFromObject(evaluated.payload);
+        if (extracted) {
+          canonicalOrderId = extracted;
+        }
         return true;
       }
 
@@ -198,7 +244,11 @@ const forwardOrderToSheets = async (sourceBody) => {
     }
   }
 
-  return { ok: true, status: 200 };
+  return {
+    ok: true,
+    status: 200,
+    orderId: canonicalOrderId || toPositiveInt(orderId) || undefined,
+  };
 };
 
 app.post('/append-order', async (req, res) => {
@@ -207,7 +257,7 @@ app.post('/append-order', async (req, res) => {
     if (!result.ok) {
       return res.status(result.status).json({ error: result.error, detail: result.detail || '' });
     }
-    return res.json({ ok: true });
+    return res.json({ ok: true, orderId: result.orderId });
   } catch (err) {
     console.error('append-order processing error', err);
     return res.status(500).json({ error: 'server_error' });
@@ -226,7 +276,7 @@ app.post('/payment-confirmed', async (req, res) => {
     if (!result.ok) {
       return res.status(result.status).json({ error: result.error, detail: result.detail || '' });
     }
-    return res.json({ ok: true });
+    return res.json({ ok: true, orderId: result.orderId });
   } catch (err) {
     console.error('Webhook processing error', err);
     return res.status(500).json({ error: 'server_error' });

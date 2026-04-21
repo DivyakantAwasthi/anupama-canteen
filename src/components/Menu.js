@@ -1,6 +1,64 @@
 import { useState } from "react";
 
 const FALLBACK_IMAGE = "/menu-placeholder.svg";
+const STAR_FILLED = "\u2605";
+const STAR_EMPTY = "\u2606";
+const REVIEW_SORT_OPTIONS = [
+  { value: "top", label: "Top rated" },
+  { value: "helpful", label: "Most helpful" },
+  { value: "newest", label: "Newest first" },
+];
+
+const getReviewDateValue = (value) => {
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+};
+
+const getHelpfulCount = (review) => Math.max(0, Number(review?.helpfulCount || 0));
+
+const getReviewTopScore = (review) => {
+  const dateValue = getReviewDateValue(review?.date);
+  const ageDays = dateValue ? Math.max(0, Math.floor((Date.now() - dateValue) / 86400000)) : 0;
+  const recencyBonus = Math.max(0, 30 - ageDays);
+  return Number(review?.rating || 0) * 20 + getHelpfulCount(review) * 1.5 + recencyBonus;
+};
+
+const getAvatarInitials = (name) => {
+  const safeName = (name || "Anonymous").trim();
+  const parts = safeName.split(/\s+/).filter(Boolean);
+  const initials = parts.slice(0, 2).map((part) => part[0]?.toUpperCase() || "").join("");
+  return initials || "AN";
+};
+
+const getAvatarToneClass = (name) => {
+  const palette = ["tone-a", "tone-b", "tone-c", "tone-d"];
+  const safeName = (name || "Anonymous").trim();
+  const hash = safeName.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return palette[hash % palette.length];
+};
+
+const formatReviewDate = (value) => {
+  const dateValue = getReviewDateValue(value);
+  if (!dateValue) {
+    return "Recent";
+  }
+
+  const daysAgo = Math.floor((Date.now() - dateValue) / 86400000);
+  if (daysAgo <= 0) {
+    return "Today";
+  }
+  if (daysAgo === 1) {
+    return "Yesterday";
+  }
+  if (daysAgo < 7) {
+    return `${daysAgo}d ago`;
+  }
+
+  return new Date(dateValue).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+  });
+};
 
 function Menu({
   snacks,
@@ -25,6 +83,7 @@ function Menu({
 }) {
   const [quantities, setQuantities] = useState({});
   const [expandedReviews, setExpandedReviews] = useState({});
+  const [reviewSortBy, setReviewSortBy] = useState({});
 
   const getSelectedQty = (id) => quantities[id] || 1;
 
@@ -187,6 +246,42 @@ function Menu({
           {snacks.map((snack) => {
             const itemReviews = reviews[snack.id] || [];
             const reviewsOpen = Boolean(expandedReviews[snack.id]);
+            const selectedReviewSort = reviewSortBy[snack.id] || "top";
+            const topReviewId = [...itemReviews].sort(
+              (firstReview, secondReview) =>
+                getReviewTopScore(secondReview) - getReviewTopScore(firstReview)
+            )[0]?.id;
+            const sortedReviews = [...itemReviews].sort((firstReview, secondReview) => {
+              if (selectedReviewSort === "helpful") {
+                const byHelpful = getHelpfulCount(secondReview) - getHelpfulCount(firstReview);
+                if (byHelpful !== 0) {
+                  return byHelpful;
+                }
+                return Number(secondReview.rating || 0) - Number(firstReview.rating || 0);
+              }
+
+              if (selectedReviewSort === "newest") {
+                const byDate = getReviewDateValue(secondReview.date) - getReviewDateValue(firstReview.date);
+                if (byDate !== 0) {
+                  return byDate;
+                }
+                return Number(secondReview.rating || 0) - Number(firstReview.rating || 0);
+              }
+
+              const byRating = Number(secondReview.rating || 0) - Number(firstReview.rating || 0);
+              if (byRating !== 0) {
+                return byRating;
+              }
+
+              const byHelpful = getHelpfulCount(secondReview) - getHelpfulCount(firstReview);
+              if (byHelpful !== 0) {
+                return byHelpful;
+              }
+
+              return getReviewDateValue(secondReview.date) - getReviewDateValue(firstReview.date);
+            });
+            const visibleReviews = sortedReviews.slice(0, 4);
+            const extraReviewCount = Math.max(0, itemReviews.length - visibleReviews.length);
 
             return (
               <article className="menu-card" key={snack.id}>
@@ -218,8 +313,8 @@ function Menu({
                     {itemRatings[snack.id] ? (
                       <div className="item-rating">
                         <span className="stars">
-                          {"★".repeat(Math.floor(itemRatings[snack.id].rating))}
-                          {"☆".repeat(5 - Math.floor(itemRatings[snack.id].rating))}
+                          {STAR_FILLED.repeat(Math.floor(itemRatings[snack.id].rating))}
+                          {STAR_EMPTY.repeat(5 - Math.floor(itemRatings[snack.id].rating))}
                         </span>
                         <span className="rating-text">
                           {itemRatings[snack.id].rating} ({itemRatings[snack.id].reviewCount})
@@ -298,27 +393,65 @@ function Menu({
                   ) : null}
                   {itemReviews.length > 0 && reviewsOpen ? (
                     <div className="reviews-section">
-                      <h4>Customer Reviews ({itemReviews.length})</h4>
+                      <div className="review-head-row">
+                        <h4>Customer Reviews ({itemReviews.length})</h4>
+                        <label className="review-sort-wrap">
+                          <span>Sort</span>
+                          <select
+                            className="review-sort-select"
+                            value={selectedReviewSort}
+                            onChange={(event) =>
+                              setReviewSortBy((prev) => ({
+                                ...prev,
+                                [snack.id]: event.target.value,
+                              }))
+                            }
+                            aria-label={`Sort reviews for ${snack.name}`}
+                          >
+                            {REVIEW_SORT_OPTIONS.map((sortOption) => (
+                              <option key={sortOption.value} value={sortOption.value}>
+                                {sortOption.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
                       <div className="reviews-list">
-                        {itemReviews.slice(0, 3).map((review) => (
-                          <div key={review.id} className="review-item">
+                        {visibleReviews.map((review) => (
+                          <div
+                            key={review.id}
+                            className={`review-item ${review.id === topReviewId ? "top-review" : ""}`}
+                          >
                             <div className="review-header">
-                              <span className="review-author">{review.name}</span>
-                              <div className="review-rating">
-                                <span className="review-stars">
-                                  {"★".repeat(review.rating)}
-                                  {"☆".repeat(5 - review.rating)}
-                                </span>
-                                <span className="review-date">{review.date}</span>
+                              <div className="review-author-block">
+                                <div className={`review-avatar ${getAvatarToneClass(review.name)}`}>
+                                  {getAvatarInitials(review.name)}
+                                </div>
+                                <div className="review-author-meta">
+                                  <div className="review-author-row">
+                                    <span className="review-author">{review.name || "Anonymous"}</span>
+                                    {review.id === topReviewId ? (
+                                      <span className="top-review-badge">Top Review</span>
+                                    ) : null}
+                                  </div>
+                                  <div className="review-rating">
+                                    <span className="review-stars">
+                                      {STAR_FILLED.repeat(Number(review.rating || 0))}
+                                      {STAR_EMPTY.repeat(5 - Number(review.rating || 0))}
+                                    </span>
+                                    <span className="review-date">{formatReviewDate(review.date)}</span>
+                                  </div>
+                                </div>
                               </div>
+                              <span className="review-helpful">{getHelpfulCount(review)} helpful</span>
                             </div>
                             <p className="review-comment">{review.comment}</p>
                           </div>
                         ))}
-                        {itemReviews.length > 3 ? (
+                        {extraReviewCount > 0 ? (
                           <p className="more-reviews">
-                            +{itemReviews.length - 3} more review
-                            {itemReviews.length - 3 !== 1 ? "s" : ""}
+                            +{extraReviewCount} more review
+                            {extraReviewCount !== 1 ? "s" : ""}
                           </p>
                         ) : null}
                       </div>

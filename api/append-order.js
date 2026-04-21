@@ -60,8 +60,10 @@ const evaluateForwardResponse = async (response) => {
         };
       }
       if (parsed.ok === true || parsed.success === true) {
-        return { ok: true };
+        return { ok: true, payload: parsed };
       }
+
+      return { ok: true, payload: parsed };
     }
   } catch {
     // non-JSON response
@@ -72,6 +74,44 @@ const evaluateForwardResponse = async (response) => {
   }
 
   return { ok: true };
+};
+
+const toPositiveInt = (value) => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const extractOrderIdFromObject = (source) => {
+  if (!source || typeof source !== "object") {
+    return null;
+  }
+
+  const direct = [
+    source.orderId,
+    source.id,
+    source.order_id,
+    source.orderNumber,
+    source.order_number,
+    source.sheetOrderId,
+    source.sheet_order_id,
+  ];
+
+  for (const candidate of direct) {
+    const parsed = toPositiveInt(candidate);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  const nested = [source.order, source.data, source.result];
+  for (const value of nested) {
+    const parsed = extractOrderIdFromObject(value);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  return null;
 };
 
 module.exports = async (req, res) => {
@@ -140,11 +180,17 @@ module.exports = async (req, res) => {
       timestamp: actionPayload.timestamp,
     };
 
+    let canonicalOrderId = null;
+
     const tryForward = async (label, requestFn) => {
       try {
         const forwardResponse = await requestFn();
         const evaluated = await evaluateForwardResponse(forwardResponse);
         if (evaluated.ok) {
+          const extracted = extractOrderIdFromObject(evaluated.payload);
+          if (extracted) {
+            canonicalOrderId = extracted;
+          }
           return true;
         }
 
@@ -225,7 +271,10 @@ module.exports = async (req, res) => {
       }
     }
 
-    return res.status(200).json({ ok: true });
+    return res.status(200).json({
+      ok: true,
+      orderId: canonicalOrderId || toPositiveInt(orderId) || undefined,
+    });
   } catch (error) {
     console.error("Append endpoint error", error);
     return res

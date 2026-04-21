@@ -44,8 +44,10 @@ const evaluateForwardResponse = async (response) => {
         };
       }
       if (parsed.ok === true || parsed.success === true) {
-        return { ok: true };
+        return { ok: true, payload: parsed };
       }
+
+      return { ok: true, payload: parsed };
     }
   } catch {
     // non-JSON response
@@ -56,6 +58,44 @@ const evaluateForwardResponse = async (response) => {
   }
 
   return { ok: true };
+};
+
+const toPositiveInt = (value) => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const extractOrderIdFromObject = (source) => {
+  if (!source || typeof source !== "object") {
+    return null;
+  }
+
+  const direct = [
+    source.orderId,
+    source.id,
+    source.order_id,
+    source.orderNumber,
+    source.order_number,
+    source.sheetOrderId,
+    source.sheet_order_id,
+  ];
+
+  for (const candidate of direct) {
+    const parsed = toPositiveInt(candidate);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  const nested = [source.order, source.data, source.result];
+  for (const value of nested) {
+    const parsed = extractOrderIdFromObject(value);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  return null;
 };
 
 module.exports = async (req, res) => {
@@ -122,7 +162,10 @@ module.exports = async (req, res) => {
       return res.status(502).json({ error: 'forward_failed' });
     }
 
-    return res.json({ ok: true });
+    return res.json({
+      ok: true,
+      orderId: extractOrderIdFromObject(evaluated.payload) || toPositiveInt(orderId) || undefined,
+    });
   } catch (err) {
     console.error('Webhook handler error', err);
     return res.status(500).json({ error: 'server_error' });

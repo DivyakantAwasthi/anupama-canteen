@@ -56,6 +56,7 @@ const generateDemoReviews = (itemName) => {
     rating: template.rating,
     comment: template.text,
     date: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Random date within last 30 days
+    helpfulCount: Math.max(0, Math.floor(Math.random() * 35) + (template.rating >= 4 ? 8 : 2)),
   }));
 };
 
@@ -874,6 +875,7 @@ function App() {
       rating: newReview.rating,
       comment: newReview.comment.trim(),
       date: new Date().toISOString().split('T')[0],
+      helpfulCount: 0,
     };
 
     setReviews((prev) => ({
