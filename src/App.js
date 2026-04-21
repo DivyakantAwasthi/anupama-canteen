@@ -7,6 +7,7 @@ import {
   fetchActiveMenuItems,
   fetchOrderStatusFromSheet,
 } from "./services/sheetsService";
+import { fetchReviewsByItemIds, saveReviewForItem } from "./services/reviewService";
 import { sendWhatsAppStatusNotification } from "./services/whatsappService";
 import "./App.css";
 import amul from "./assets/brands/amul.png";
@@ -60,14 +61,27 @@ const generateDemoReviews = (itemName) => {
   }));
 };
 
-// Generate ratings for menu items
-const generateItemRating = (itemId) => {
-  // Generate rating between 4.1 and 4.8
-  const baseRating = 4.1 + Math.random() * 0.7;
-  return {
-    rating: Math.round(baseRating * 10) / 10,
-    reviewCount: Math.floor(Math.random() * 50) + 10, // 10-59 reviews
-  };
+const getRatingsFromReviews = (items, reviewsByItem) => {
+  const ratings = {};
+
+  items.forEach((item) => {
+    const itemReviews = Array.isArray(reviewsByItem?.[item.id]) ? reviewsByItem[item.id] : [];
+    if (!itemReviews.length) {
+      ratings[item.id] = {
+        rating: 0,
+        reviewCount: 0,
+      };
+      return;
+    }
+
+    const totalRating = itemReviews.reduce((sum, review) => sum + Number(review.rating || 0), 0);
+    ratings[item.id] = {
+      rating: Math.round((totalRating / itemReviews.length) * 10) / 10,
+      reviewCount: itemReviews.length,
+    };
+  });
+
+  return ratings;
 };
 
 const STATUS_TEXT = {
@@ -593,18 +607,21 @@ function App() {
       const items = await fetchActiveMenuItems();
       setMenuItems(items);
 
-      // Initialize ratings and reviews for demo purposes
-      const ratings = {};
-      const reviewsData = {};
+      const itemIds = items.map((item) => item.id);
+      let reviewsData = {};
+      try {
+        reviewsData = await fetchReviewsByItemIds(itemIds);
+      } catch {
+        // Fallback keeps UI usable when reviews backend is not yet configured.
+        reviewsData = {};
+        items.forEach((item) => {
+          reviewsData[item.id] = generateDemoReviews(item.name);
+        });
+      }
 
-      items.forEach((item) => {
-        const rating = generateItemRating(item.id);
-        ratings[item.id] = rating;
-        reviewsData[item.id] = generateDemoReviews(item.name);
-      });
-
-      setItemRatings(ratings);
+      const ratings = getRatingsFromReviews(items, reviewsData);
       setReviews(reviewsData);
+      setItemRatings(ratings);
     } catch (error) {
       if (!silent) {
         setMenuError(
@@ -883,21 +900,24 @@ function App() {
       [reviewingItem.id]: [reviewData, ...(prev[reviewingItem.id] || [])],
     }));
 
-    // Update rating calculation
-    setItemRatings((prev) => {
-      const currentReviews = [...(reviews[reviewingItem.id] || []), reviewData];
-      const avgRating = currentReviews.reduce((sum, r) => sum + r.rating, 0) / currentReviews.length;
-
-      return {
-        ...prev,
-        [reviewingItem.id]: {
-          rating: Math.round(avgRating * 10) / 10,
-          reviewCount: currentReviews.length,
-        },
-      };
-    });
+    const currentReviews = [...(reviews[reviewingItem.id] || []), reviewData];
+    const avgRating = currentReviews.reduce((sum, r) => sum + r.rating, 0) / currentReviews.length;
+    setItemRatings((prev) => ({
+      ...prev,
+      [reviewingItem.id]: {
+        rating: Math.round(avgRating * 10) / 10,
+        reviewCount: currentReviews.length,
+      },
+    }));
 
     closeReviewModal();
+
+    saveReviewForItem({
+      itemId: reviewingItem.id,
+      review: reviewData,
+    }).catch((error) => {
+      console.error("Review sync failed:", error?.message || error);
+    });
   };
 
   const onReviewFieldChange = (field, value) => {
