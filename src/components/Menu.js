@@ -1,4 +1,11 @@
 import { useState } from "react";
+import {
+  sortReviews,
+  getAvatarInitials,
+  getAvatarToneClass,
+  formatReviewDate,
+  getHelpfulCount,
+} from "../utils/reviews";
 
 const FALLBACK_IMAGE = "/menu-placeholder.svg";
 const STAR_FILLED = "\u2605";
@@ -8,57 +15,6 @@ const REVIEW_SORT_OPTIONS = [
   { value: "helpful", label: "Most helpful" },
   { value: "newest", label: "Newest first" },
 ];
-
-const getReviewDateValue = (value) => {
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? 0 : timestamp;
-};
-
-const getHelpfulCount = (review) => Math.max(0, Number(review?.helpfulCount || 0));
-
-const getReviewTopScore = (review) => {
-  const dateValue = getReviewDateValue(review?.date);
-  const ageDays = dateValue ? Math.max(0, Math.floor((Date.now() - dateValue) / 86400000)) : 0;
-  const recencyBonus = Math.max(0, 30 - ageDays);
-  return Number(review?.rating || 0) * 20 + getHelpfulCount(review) * 1.5 + recencyBonus;
-};
-
-const getAvatarInitials = (name) => {
-  const safeName = (name || "Anonymous").trim();
-  const parts = safeName.split(/\s+/).filter(Boolean);
-  const initials = parts.slice(0, 2).map((part) => part[0]?.toUpperCase() || "").join("");
-  return initials || "AN";
-};
-
-const getAvatarToneClass = (name) => {
-  const palette = ["tone-a", "tone-b", "tone-c", "tone-d"];
-  const safeName = (name || "Anonymous").trim();
-  const hash = safeName.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  return palette[hash % palette.length];
-};
-
-const formatReviewDate = (value) => {
-  const dateValue = getReviewDateValue(value);
-  if (!dateValue) {
-    return "Recent";
-  }
-
-  const daysAgo = Math.floor((Date.now() - dateValue) / 86400000);
-  if (daysAgo <= 0) {
-    return "Today";
-  }
-  if (daysAgo === 1) {
-    return "Yesterday";
-  }
-  if (daysAgo < 7) {
-    return `${daysAgo}d ago`;
-  }
-
-  return new Date(dateValue).toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-  });
-};
 
 function Menu({
   snacks,
@@ -259,39 +215,8 @@ function Menu({
             const itemReviews = reviews[snack.id] || [];
             const reviewsOpen = Boolean(expandedReviews[snack.id]);
             const selectedReviewSort = reviewSortBy[snack.id] || "top";
-            const topReviewId = [...itemReviews].sort(
-              (firstReview, secondReview) =>
-                getReviewTopScore(secondReview) - getReviewTopScore(firstReview)
-            )[0]?.id;
-            const sortedReviews = [...itemReviews].sort((firstReview, secondReview) => {
-              if (selectedReviewSort === "helpful") {
-                const byHelpful = getHelpfulCount(secondReview) - getHelpfulCount(firstReview);
-                if (byHelpful !== 0) {
-                  return byHelpful;
-                }
-                return Number(secondReview.rating || 0) - Number(firstReview.rating || 0);
-              }
-
-              if (selectedReviewSort === "newest") {
-                const byDate = getReviewDateValue(secondReview.date) - getReviewDateValue(firstReview.date);
-                if (byDate !== 0) {
-                  return byDate;
-                }
-                return Number(secondReview.rating || 0) - Number(firstReview.rating || 0);
-              }
-
-              const byRating = Number(secondReview.rating || 0) - Number(firstReview.rating || 0);
-              if (byRating !== 0) {
-                return byRating;
-              }
-
-              const byHelpful = getHelpfulCount(secondReview) - getHelpfulCount(firstReview);
-              if (byHelpful !== 0) {
-                return byHelpful;
-              }
-
-              return getReviewDateValue(secondReview.date) - getReviewDateValue(firstReview.date);
-            });
+            const sortedReviews = sortReviews(itemReviews, selectedReviewSort);
+            const topReviewId = sortedReviews[0]?.id;
             const visibleReviews = sortedReviews.slice(0, 4);
             const extraReviewCount = Math.max(0, itemReviews.length - visibleReviews.length);
 
