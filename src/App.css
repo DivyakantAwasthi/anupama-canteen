@@ -1003,6 +1003,74 @@ body, input, button, select {
   animation: slideIn 0.3s ease-out;
 }
 
+.error-container {
+  padding: 24px;
+  background: linear-gradient(135deg, #fef2f2 0%, #fdf6f0 100%);
+  border: 2px solid #fecaca;
+  border-radius: 12px;
+  text-align: center;
+  margin-top: 16px;
+}
+
+.error-icon {
+  font-size: 3rem;
+  margin-bottom: 12px;
+  animation: bounce 2s ease-in-out infinite;
+}
+
+.error-title {
+  margin: 12px 0;
+  color: var(--danger);
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.error-detail {
+  font-size: 0.85rem;
+  color: #666;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 6px;
+  font-family: 'Monaco', 'Courier New', monospace;
+  word-break: break-word;
+}
+
+.retry-button {
+  margin-top: 16px;
+  padding: 12px 24px;
+  background: var(--brand);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 1rem;
+}
+
+.retry-button:hover {
+  background: var(--brand-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.2);
+}
+
+.retry-button:active {
+  transform: translateY(0);
+}
+
+.fallback-notice {
+  margin-top: 12px;
+  color: #999;
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;

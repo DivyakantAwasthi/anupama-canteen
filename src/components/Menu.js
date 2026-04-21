@@ -116,10 +116,22 @@ function Menu({
         <div className="panel-head">
           <h2>Snack Menu</h2>
         </div>
-        <p className="error-text">{error}</p>
-        <button type="button" onClick={onRetry}>
-          Retry
-        </button>
+        <div className="error-container">
+          <div className="error-icon">⚠️</div>
+          <h3 className="error-title">Menu Temporarily Unavailable</h3>
+          <p className="error-text">
+            We're having trouble loading the menu. This could be due to network issues or a temporary server problem. Please try again, or browse our fallback menu below.
+          </p>
+          <p className="error-detail" style={{ fontSize: "0.85rem", color: "#666", marginTop: "8px" }}>
+            Technical details: {error}
+          </p>
+          <button type="button" onClick={onRetry} className="retry-button">
+            🔄 Retry Loading
+          </button>
+          <p className="fallback-notice" style={{ fontSize: "0.8rem", color: "#999", marginTop: "12px" }}>
+            Note: If the menu doesn't load, you'll see our fallback menu below.
+          </p>
+        </div>
       </section>
     );
   }

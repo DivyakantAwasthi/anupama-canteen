@@ -170,10 +170,114 @@ const writeCachedMenuItems = (items) => {
   }
 };
 
+// Fallback menu data - ensures app works even if API is down
+const FALLBACK_MENU_DATA = [
+  {
+    id: "fallback-1",
+    name: "Vada Pav",
+    price: 25,
+    image: STABLE_MENU_IMAGE_BY_NAME["vada pav"],
+    category: "Quick Bites",
+    active: true,
+  },
+  {
+    id: "fallback-2",
+    name: "Cheese Vada Pav",
+    price: 35,
+    image: STABLE_MENU_IMAGE_BY_NAME["cheese vada pav"],
+    category: "Quick Bites",
+    active: true,
+  },
+  {
+    id: "fallback-3",
+    name: "Dosa",
+    price: 40,
+    image: STABLE_MENU_IMAGE_BY_NAME["dosa"],
+    category: "South Indian",
+    active: true,
+  },
+  {
+    id: "fallback-4",
+    name: "Samosa",
+    price: 15,
+    image: STABLE_MENU_IMAGE_BY_NAME["samosa"],
+    category: "Quick Bites",
+    active: true,
+  },
+  {
+    id: "fallback-5",
+    name: "Tea",
+    price: 10,
+    image: STABLE_MENU_IMAGE_BY_NAME["tea"],
+    category: "Beverages",
+    active: true,
+  },
+  {
+    id: "fallback-6",
+    name: "Coffee",
+    price: 15,
+    image: STABLE_MENU_IMAGE_BY_NAME["coffee"],
+    category: "Beverages",
+    active: true,
+  },
+  {
+    id: "fallback-7",
+    name: "Club Sandwich",
+    price: 60,
+    image: STABLE_MENU_IMAGE_BY_NAME["club sandwich"],
+    category: "Quick Bites",
+    active: true,
+  },
+  {
+    id: "fallback-8",
+    name: "Veg Noodles (Half)",
+    price: 50,
+    image: STABLE_MENU_IMAGE_BY_NAME["veg noodles half"],
+    category: "Meals",
+    active: true,
+  },
+];
+
+const fetchWithTimeout = (url, options = {}, timeoutMs = 8000) => {
+  return Promise.race([
+    fetch(url, options),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("request_timeout")), timeoutMs)
+    ),
+  ]);
+};
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const retryWithBackoff = async (fn, maxAttempts = 3, initialDelayMs = 500) => {
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      console.warn(
+        `[Menu Fetch] Attempt ${attempt}/${maxAttempts} failed:`,
+        error?.message || error
+      );
+
+      if (attempt < maxAttempts) {
+        const delayMs = initialDelayMs * Math.pow(2, attempt - 1);
+        await sleep(delayMs);
+      }
+    }
+  }
+
+  throw lastError;
+};
+
 export async function fetchActiveMenuItems() {
   const baseOrigin =
     typeof window !== "undefined" ? window.location.origin : "http://localhost";
   const attempts = [];
+
+  console.log("[Menu Fetch] Starting menu fetch from base origin:", baseOrigin);
 
   const readMenuRows = async (rawUrl) => {
     const menuUrl = new URL(rawUrl, baseOrigin);
@@ -181,16 +285,23 @@ export async function fetchActiveMenuItems() {
       menuUrl.searchParams.set("action", "menu");
     }
 
-    const response = await fetch(menuUrl.toString(), {
+    console.log(`[Menu Fetch] Attempting to fetch from: ${menuUrl.toString()}`);
+
+    const response = await fetchWithTimeout(menuUrl.toString(), {
       method: "GET",
       mode: "cors",
+      headers: {
+        Accept: "application/json",
+      },
     });
 
     if (!response.ok) {
+      console.error(`[Menu Fetch] HTTP ${response.status} from ${menuUrl.toString()}`);
       throw new Error(`HTTP ${response.status}`);
     }
 
     const payload = await response.json();
+    console.log(`[Menu Fetch] Successfully fetched from ${menuUrl.toString()}`);
     return Array.isArray(payload?.items)
       ? payload.items
       : Array.isArray(payload)
@@ -207,30 +318,46 @@ export async function fetchActiveMenuItems() {
   }
 
   if (!candidates.length) {
+    console.error("[Menu Fetch] No API candidates configured");
     throw new Error("Set REACT_APP_MENU_API_URL or REACT_APP_ORDERS_API_URL in .env");
   }
 
   for (const candidate of candidates) {
     try {
-      const rows = await readMenuRows(candidate.url);
+      const rows = await retryWithBackoff(() => readMenuRows(candidate.url), 2, 500);
       const normalizedRows = rows
         .map((row, index) => normalizeMenuRow(row, index))
         .filter((row) => row && row.active);
+
       if (normalizedRows.length) {
         writeCachedMenuItems(normalizedRows);
+        console.log(
+          `[Menu Fetch] Successfully loaded ${normalizedRows.length} items from ${candidate.label}`
+        );
+        return normalizedRows;
       }
-      return normalizedRows;
     } catch (error) {
-      attempts.push(`${candidate.label}: ${error?.message || "failed"}`);
+      const errorMsg = error?.message || "failed";
+      attempts.push(`${candidate.label}: ${errorMsg}`);
+      console.warn(`[Menu Fetch] Failed ${candidate.label}:`, errorMsg);
     }
   }
 
+  // Try to use cached menu
   const cachedItems = readCachedMenuItems();
   if (cachedItems.length) {
+    console.log(
+      `[Menu Fetch] Using cached menu with ${cachedItems.length} items (API unavailable)`
+    );
     return cachedItems;
   }
 
-  throw new Error(`Unable to fetch menu items from API. ${attempts.join(" | ")}`);
+  // Use fallback menu as last resort
+  console.warn(
+    "[Menu Fetch] All API endpoints failed and no cache available. Using fallback menu data."
+  );
+  console.warn(`[Menu Fetch] Failed attempts: ${attempts.join(" | ")}`);
+  return FALLBACK_MENU_DATA;
 }
 
 const buildOrderPayload = ({
