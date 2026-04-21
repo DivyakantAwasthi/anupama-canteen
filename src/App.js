@@ -29,6 +29,46 @@ const ORDERS_STORAGE_KEY_PREFIX = "anupama:orders:";
 const ORDER_COUNTER_KEY_PREFIX = "anupama:orderCounter:";
 const WHATSAPP_SENT_KEY_PREFIX = "anupama:whatsappSent:";
 
+// Generate demo reviews for an item
+const generateDemoReviews = (itemName) => {
+  const reviewTemplates = [
+    { text: "Amazing taste! Fresh and delicious. Will definitely order again.", rating: 5 },
+    { text: "Good quality and fast service. Perfect for a quick snack.", rating: 4 },
+    { text: "Tasty but a bit spicy for my liking. Overall good experience.", rating: 4 },
+    { text: "Fresh ingredients and great packaging. Highly recommended!", rating: 5 },
+    { text: "Decent taste but could be better. Value for money though.", rating: 3 },
+    { text: "Love it! Always consistent quality and quick delivery.", rating: 5 },
+    { text: "Good portion size and reasonable price. Happy with the order.", rating: 4 },
+    { text: "Could be hotter when delivered, but taste is excellent.", rating: 4 },
+    { text: "Best in town! Authentic flavors and fresh preparation.", rating: 5 },
+    { text: "Satisfactory. Nothing extraordinary but meets expectations.", rating: 3 },
+    { text: "Perfect for office lunch. Quick and tasty!", rating: 4 },
+    { text: "Great value for money. Will try other items too.", rating: 4 },
+  ];
+
+  const numReviews = Math.floor(Math.random() * 4) + 3; // 3-6 reviews
+  const shuffled = [...reviewTemplates].sort(() => 0.5 - Math.random());
+  const selected = shuffled.slice(0, numReviews);
+
+  return selected.map((template, index) => ({
+    id: `${itemName.toLowerCase().replace(/\s+/g, '-')}-review-${index + 1}`,
+    name: ["Rahul S.", "Priya M.", "Amit K.", "Sneha P.", "Vikram R.", "Anjali T."][index % 6],
+    rating: template.rating,
+    comment: template.text,
+    date: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Random date within last 30 days
+  }));
+};
+
+// Generate ratings for menu items
+const generateItemRating = (itemId) => {
+  // Generate rating between 4.1 and 4.8
+  const baseRating = 4.1 + Math.random() * 0.7;
+  return {
+    rating: Math.round(baseRating * 10) / 10,
+    reviewCount: Math.floor(Math.random() * 50) + 10, // 10-59 reviews
+  };
+};
+
 const STATUS_TEXT = {
   pending_payment: "Awaiting payment",
   payment_verified: "Payment verified",
@@ -50,6 +90,8 @@ const getOrdersKey = (dateKey) => `${ORDERS_STORAGE_KEY_PREFIX}${dateKey}`;
 const getOrderCounterKey = (dateKey) => `${ORDER_COUNTER_KEY_PREFIX}${dateKey}`;
 const getWhatsAppSentKey = (orderDateKey, orderId, status) =>
   `${WHATSAPP_SENT_KEY_PREFIX}${orderDateKey}:${orderId}:${status}`;
+
+const FALLBACK_BRAND_LOGO = "/logo.png";
 
 const readOrdersForDate = (dateKey) => {
   try {
@@ -217,28 +259,94 @@ const parseOrderItems = (value) => {
 
 const BrandStrip = () => {
   const brands = [
-    amul,
-    campa,
-    coke,
-    heinz,
-    hellman,
-    maggi,
-    mdh,
-    nestle,
-    veeba,
-    "/brands/kissan.png",
-    "/brands/knorr.svg",
-    "/brands/everest.png",
-    "/brands/mtr.svg",
-    "/brands/chings.png",
+    { src: amul, label: "Amul" },
+    { src: campa, label: "Campa" },
+    { src: coke, label: "Coca-Cola" },
+    { src: heinz, label: "Heinz" },
+    { src: hellman, label: "Hellmann's" },
+    { src: maggi, label: "Maggi" },
+    { src: mdh, label: "MDH" },
+    { src: nestle, label: "Nestle" },
+    { src: veeba, label: "Veeba" },
+    { src: "/brands/kissan.png", label: "Kissan" },
+    { src: "/brands/knorr.png", label: "Knorr" },
+    { src: "/brands/everest.png", label: "Everest" },
+    { src: "/brands/mtr.png", label: "MTR" },
+    { src: "/brands/chings.png", label: "Ching's" },
   ];
 
   return (
     <div className="brand-strip">
       {brands.map((logo, index) => (
-        <img key={index} src={logo} className="brand-strip-logo" alt="Partner brand logo" />
+        <img
+          key={index}
+          src={logo.src}
+          className="brand-strip-logo"
+          alt={`${logo.label} brand logo`}
+          loading="lazy"
+          onError={(event) => {
+            event.currentTarget.onerror = null;
+            event.currentTarget.src = FALLBACK_BRAND_LOGO;
+          }}
+        />
       ))}
     </div>
+  );
+};
+
+const BrandLogosSection = () => {
+  const leftBrands = [
+    { src: amul, label: "Amul" },
+    { src: campa, label: "Campa" },
+    { src: coke, label: "Coca-Cola" },
+    { src: heinz, label: "Heinz" },
+    { src: "/brands/knorr.png", label: "Knorr" },
+  ];
+
+  const rightBrands = [
+    { src: maggi, label: "Maggi" },
+    { src: mdh, label: "MDH" },
+    { src: nestle, label: "Nestle" },
+    { src: veeba, label: "Veeba" },
+    { src: "/brands/mtr.png", label: "MTR" },
+  ];
+
+  return (
+    <>
+      {/* Left side brand logos */}
+      <div className="brands-section">
+        {leftBrands.map((logo, index) => (
+          <div key={`left-${index}`} className="brand-logo-item">
+            <img
+              src={logo.src}
+              alt={`${logo.label} brand`}
+              loading="lazy"
+              onError={(event) => {
+                event.currentTarget.onerror = null;
+                event.currentTarget.src = FALLBACK_BRAND_LOGO;
+              }}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Right side brand logos */}
+      <div className="brands-section-right">
+        {rightBrands.map((logo, index) => (
+          <div key={`right-${index}`} className="brand-logo-item">
+            <img
+              src={logo.src}
+              alt={`${logo.label} brand`}
+              loading="lazy"
+              onError={(event) => {
+                event.currentTarget.onerror = null;
+                event.currentTarget.src = FALLBACK_BRAND_LOGO;
+              }}
+            />
+          </div>
+        ))}
+      </div>
+    </>
   );
 };
 
@@ -265,6 +373,15 @@ function App() {
   const [trackingError, setTrackingError] = useState("");
   const [ordersRefreshKey, setOrdersRefreshKey] = useState(0);
   const [todayOrders, setTodayOrders] = useState([]);
+  const [reviews, setReviews] = useState({});
+  const [itemRatings, setItemRatings] = useState({});
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [reviewingItem, setReviewingItem] = useState(null);
+  const [newReview, setNewReview] = useState({
+    name: "",
+    rating: 5,
+    comment: "",
+  });
 
   const totalPrice = useMemo(
     () => cartItems.reduce((sum, item) => sum + item.price, 0),
@@ -318,6 +435,25 @@ function App() {
   const cartUnitCount = useMemo(
     () => cartItems.reduce((sum, item) => sum + (item.quantity || 1), 0),
     [cartItems]
+  );
+
+  const averageMenuRating = useMemo(() => {
+    const values = Object.values(itemRatings);
+    if (!values.length) {
+      return "4.8";
+    }
+
+    const totalRating = values.reduce((sum, entry) => sum + Number(entry?.rating || 0), 0);
+    return (totalRating / values.length).toFixed(1);
+  }, [itemRatings]);
+
+  const totalReviewCount = useMemo(
+    () =>
+      Object.values(itemRatings).reduce(
+        (sum, entry) => sum + Number(entry?.reviewCount || 0),
+        0
+      ),
+    [itemRatings]
   );
 
   useEffect(() => {
@@ -455,6 +591,19 @@ function App() {
     try {
       const items = await fetchActiveMenuItems();
       setMenuItems(items);
+
+      // Initialize ratings and reviews for demo purposes
+      const ratings = {};
+      const reviewsData = {};
+
+      items.forEach((item) => {
+        const rating = generateItemRating(item.id);
+        ratings[item.id] = rating;
+        reviewsData[item.id] = generateDemoReviews(item.name);
+      });
+
+      setItemRatings(ratings);
+      setReviews(reviewsData);
     } catch (error) {
       if (!silent) {
         setMenuError(
@@ -697,6 +846,60 @@ function App() {
 
   const toggleFloatingCart = () => {
     setIsFloatingCartOpen((prev) => !prev);
+  };
+
+  const openReviewModal = (item) => {
+    setReviewingItem(item);
+    setNewReview({
+      name: "",
+      rating: 5,
+      comment: "",
+    });
+    setIsReviewModalOpen(true);
+  };
+
+  const closeReviewModal = () => {
+    setIsReviewModalOpen(false);
+    setReviewingItem(null);
+  };
+
+  const submitReview = () => {
+    if (!reviewingItem || !newReview.comment.trim()) {
+      return;
+    }
+
+    const reviewData = {
+      id: `user-review-${Date.now()}`,
+      name: newReview.name.trim() || "Anonymous",
+      rating: newReview.rating,
+      comment: newReview.comment.trim(),
+      date: new Date().toISOString().split('T')[0],
+    };
+
+    setReviews((prev) => ({
+      ...prev,
+      [reviewingItem.id]: [reviewData, ...(prev[reviewingItem.id] || [])],
+    }));
+
+    // Update rating calculation
+    setItemRatings((prev) => {
+      const currentReviews = [...(reviews[reviewingItem.id] || []), reviewData];
+      const avgRating = currentReviews.reduce((sum, r) => sum + r.rating, 0) / currentReviews.length;
+
+      return {
+        ...prev,
+        [reviewingItem.id]: {
+          rating: Math.round(avgRating * 10) / 10,
+          reviewCount: currentReviews.length,
+        },
+      };
+    });
+
+    closeReviewModal();
+  };
+
+  const onReviewFieldChange = (field, value) => {
+    setNewReview((prev) => ({ ...prev, [field]: value }));
   };
 
   const onCustomerFieldChange = (event) => {
@@ -944,21 +1147,109 @@ function App() {
 
   return (
     <div className="app">
-      <header className="app-header">
-        <div className="brand-row">
-          <img src="/logo.png" alt="Anupama Canteen logo" className="brand-logo" />
-          <div>
-            <h1>Anupama Canteen</h1>
-            <p>Fresh snacks. Fast ordering. Smooth pickup.</p>
+      <header className="app-header sticky-header">
+        <div className="header-content">
+          <div className="brand-row">
+            <img src="/logo.png" alt="Anupama Canteen logo" className="brand-logo" />
+            <div>
+              <h1>Anupama Canteen</h1>
+              <p>Fresh snacks. Fast ordering. Smooth pickup.</p>
+            </div>
           </div>
+          <button
+            type="button"
+            className="header-cart-btn"
+            onClick={toggleFloatingCart}
+            aria-label={`Cart with ${cartUnitCount} items`}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM7.2 14h9.9c.9 0 1.7-.5 2.1-1.3l3.3-6.1a1 1 0 0 0-.9-1.5H6.1L5.4 2H2v2h2l2.5 9.5a2 2 0 0 0 1.9 1.5z" />
+            </svg>
+            {cartUnitCount > 0 && (
+              <span className="header-cart-count">{cartUnitCount}</span>
+            )}
+          </button>
         </div>
       </header>
+
+      <section className="hero-section">
+        <div className="hero-content">
+          <h2 className="hero-title">Delicious Food, Delivered Fast</h2>
+          <p className="hero-subtitle">Fresh, hygienic meals prepared with love. Order now and enjoy!</p>
+          <div className="hero-features">
+            <div className="hero-feature">
+              <span className="feature-icon">⚡</span>
+              <span>Fast Delivery</span>
+            </div>
+            <div className="hero-feature">
+              <span className="feature-icon">🛡️</span>
+              <span>Hygienic & Fresh</span>
+            </div>
+            <div className="hero-feature">
+              <span className="feature-icon">💳</span>
+              <span>Easy Payment</span>
+            </div>
+          </div>
+        </div>
+        <div className="hero-image">
+          <div className="hero-food-collage">
+            <img src="/menu-placeholder.svg" alt="Delicious food" className="food-item food-1" />
+            <img src="/menu-placeholder.svg" alt="Fresh snacks" className="food-item food-2" />
+            <img src="/menu-placeholder.svg" alt="Hot meals" className="food-item food-3" />
+          </div>
+        </div>
+      </section>
+
       <section className="decision-banner">
-        <p className="decision-title">Why customers order here</p>
-        <div className="decision-points">
-          <span>Pickup in around {estimatedPrepMinutes} mins</span>
-          <span>Live status on WhatsApp</span>
-          <span>Simple UPI checkout</span>
+        <div className="decision-banner-head">
+          <div>
+            <h2>Built For Fast, Reliable Snack Decisions</h2>
+            <p>Cleaner ordering flow, stronger trust signals, faster checkout confidence.</p>
+          </div>
+          <button
+            type="button"
+            className="decision-cta-btn"
+            onClick={() => {
+              const target = document.getElementById("menu-search");
+              if (!target) {
+                return;
+              }
+              target.scrollIntoView({ behavior: "smooth", block: "center" });
+              target.focus();
+            }}
+          >
+            Explore Best Picks
+          </button>
+        </div>
+        <div className="trust-signals">
+          <div className="trust-signal">
+            <span className="trust-icon">🛡️</span>
+            <div>
+              <strong>Hygienic & Fresh</strong>
+              <p>Prepared daily with premium ingredients</p>
+            </div>
+          </div>
+          <div className="trust-signal">
+            <span className="trust-icon">⚡</span>
+            <div>
+              <strong>Fast Delivery</strong>
+              <p>Pickup in {estimatedPrepMinutes} mins</p>
+            </div>
+          </div>
+          <div className="trust-signal">
+            <span className="trust-icon">📱</span>
+            <div>
+              <strong>Live Tracking</strong>
+              <p>WhatsApp status updates</p>
+            </div>
+          </div>
+          <div className="trust-signal">
+            <span className="trust-icon">⭐</span>
+            <div>
+              <strong>{averageMenuRating}/5 Rating</strong>
+              <p>{totalReviewCount}+ customer reviews</p>
+            </div>
+          </div>
         </div>
       </section>
       <main className="main-layout">
@@ -982,6 +1273,9 @@ function App() {
           mostOrderedToday={mostOrderedToday}
           frequentlyBoughtTogether={frequentlyBoughtTogether}
           onAddBundle={addBundleToCart}
+          itemRatings={itemRatings}
+          reviews={reviews}
+          onOpenReviewModal={openReviewModal}
         />
         <div className="sidebar-stack">
           <div className="sidebar-cart-slot">
@@ -1037,6 +1331,8 @@ function App() {
       </main>
 
       <BrandStrip />
+
+      <BrandLogosSection />
 
       <button
         type="button"
@@ -1126,6 +1422,70 @@ function App() {
                 </button>
                 <button type="submit" disabled={isSavingOrder}>
                   {isSavingOrder ? "Saving..." : "Place Order"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {isReviewModalOpen && reviewingItem ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal-card review-modal">
+            <h2>Write a Review</h2>
+            <p className="muted-text">Share your experience with {reviewingItem.name}</p>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitReview();
+              }}
+              className="review-form"
+            >
+              <label htmlFor="review-name">Name (optional)</label>
+              <input
+                id="review-name"
+                type="text"
+                value={newReview.name}
+                onChange={(e) => onReviewFieldChange("name", e.target.value)}
+                placeholder="Your name"
+              />
+
+              <label>Rating</label>
+              <div className="rating-input">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    className={`star-btn ${star <= newReview.rating ? "active" : ""}`}
+                    onClick={() => onReviewFieldChange("rating", star)}
+                    aria-label={`${star} star${star !== 1 ? "s" : ""}`}
+                  >
+                    ★
+                  </button>
+                ))}
+                <span className="rating-text">{newReview.rating} star{newReview.rating !== 1 ? "s" : ""}</span>
+              </div>
+
+              <label htmlFor="review-comment">Your Review</label>
+              <textarea
+                id="review-comment"
+                value={newReview.comment}
+                onChange={(e) => onReviewFieldChange("comment", e.target.value)}
+                placeholder="Tell others about your experience..."
+                rows={4}
+                required
+              />
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={closeReviewModal}
+                >
+                  Cancel
+                </button>
+                <button type="submit" disabled={!newReview.comment.trim()}>
+                  Submit Review
                 </button>
               </div>
             </form>

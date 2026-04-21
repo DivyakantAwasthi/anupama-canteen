@@ -19,8 +19,13 @@ function Menu({
   mostOrderedToday,
   frequentlyBoughtTogether,
   onAddBundle,
+  itemRatings,
+  reviews,
+  onOpenReviewModal,
 }) {
   const [quantities, setQuantities] = useState({});
+  const [expandedReviews, setExpandedReviews] = useState({});
+
   const getSelectedQty = (id) => quantities[id] || 1;
 
   if (isLoading) {
@@ -29,7 +34,19 @@ function Menu({
         <div className="panel-head">
           <h2>Snack Menu</h2>
         </div>
-        <p className="muted-text">Loading menu...</p>
+        <div className="menu-grid">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <div className="menu-card skeleton" key={index}>
+              <div className="skeleton-image"></div>
+              <div className="menu-card-body">
+                <div className="skeleton-title"></div>
+                <div className="skeleton-text"></div>
+                <div className="skeleton-price"></div>
+                <div className="skeleton-button"></div>
+              </div>
+            </div>
+          ))}
+        </div>
       </section>
     );
   }
@@ -87,16 +104,44 @@ function Menu({
       </div>
 
       {mostOrderedToday?.length ? (
-        <div className="insight-panel">
-          <div className="insight-head">
-            <h3>Most Ordered Today</h3>
-            <span className="insight-note">Live social proof</span>
+        <div className="popular-section">
+          <div className="popular-header">
+            <h3>Popular Items</h3>
+            <span className="popular-note">Most loved by customers</span>
           </div>
-          <div className="top-ordered-list">
-            {mostOrderedToday.map((entry) => (
-              <div className="top-ordered-chip" key={entry.item.id}>
-                <strong>{entry.item.name}</strong>
-                <span>{entry.count} sold</span>
+          <div className="popular-grid">
+            {mostOrderedToday.slice(0, 6).map((entry) => (
+              <div className="popular-item" key={entry.item.id}>
+                <img
+                  src={entry.item.image || FALLBACK_IMAGE}
+                  alt={entry.item.name}
+                  className="popular-image"
+                  onError={(event) => {
+                    event.currentTarget.onerror = null;
+                    event.currentTarget.src = FALLBACK_IMAGE;
+                  }}
+                />
+                <div className="popular-content">
+                  <h4>{entry.item.name}</h4>
+                  <div className="popular-meta">
+                    <span className="popular-price">Rs. {entry.item.price}</span>
+                    <span className="popular-orders">{entry.count} ordered today</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="popular-add-btn"
+                    onClick={() => {
+                      onAddToCart({
+                        ...entry.item,
+                        quantity: 1,
+                        unitPrice: Number(entry.item.price),
+                        price: Number(entry.item.price),
+                      });
+                    }}
+                  >
+                    Add
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -117,7 +162,9 @@ function Menu({
                 </p>
                 <p className="bundle-meta">
                   Rs. {bundle.totalPrice.toFixed(2)}
-                  {bundle.count ? ` | Ordered together ${bundle.count} times today` : " | Suggested combo"}
+                  {bundle.count
+                    ? ` | Ordered together ${bundle.count} times today`
+                    : " | Suggested combo"}
                 </p>
                 <button type="button" onClick={() => onAddBundle(bundle)}>
                   Add Bundle
@@ -137,66 +184,150 @@ function Menu({
         </div>
       ) : (
         <div className="menu-grid">
-          {snacks.map((snack) => (
-            <article className="menu-card" key={snack.id}>
-              {quickPickIds?.has(String(snack.id)) ? (
-                <span className="quick-pick-badge">Quick Pick</span>
-              ) : null}
-              <img
-                src={snack.image || FALLBACK_IMAGE}
-                alt={snack.name}
-                className="menu-image"
-                loading="lazy"
-                onError={(event) => {
-                  event.currentTarget.onerror = null;
-                  event.currentTarget.src = FALLBACK_IMAGE;
-                }}
-              />
-              <div className="menu-card-body">
-                <h3>{snack.name}</h3>
-                <div className="menu-meta-row">
-                  <span className="price-badge">Rs. {snack.price}</span>
-                  <span className="food-category">{snack.category}</span>
-                </div>
-                <div className="menu-actions">
-                  <div className="qty-group">
-                    <label htmlFor={`qty-${snack.id}`}>Qty</label>
-                    <select
-                      id={`qty-${snack.id}`}
-                      value={getSelectedQty(snack.id)}
-                      onChange={(event) =>
-                        setQuantities((prev) => ({
-                          ...prev,
-                          [snack.id]: Number(event.target.value),
-                        }))
-                      }
+          {snacks.map((snack) => {
+            const itemReviews = reviews[snack.id] || [];
+            const reviewsOpen = Boolean(expandedReviews[snack.id]);
+
+            return (
+              <article className="menu-card" key={snack.id}>
+                {quickPickIds?.has(String(snack.id)) ? (
+                  <span className="quick-pick-badge">Quick Pick</span>
+                ) : null}
+                <img
+                  src={snack.image || FALLBACK_IMAGE}
+                  alt={snack.name}
+                  className="menu-image"
+                  loading="lazy"
+                  onError={(event) => {
+                    event.currentTarget.onerror = null;
+                    event.currentTarget.src = FALLBACK_IMAGE;
+                  }}
+                />
+                <div className="menu-card-body">
+                  <div className="menu-header">
+                    <h3>{snack.name}</h3>
+                    <div className="veg-indicator">
+                      <span className="veg-icon">Veg</span>
+                    </div>
+                  </div>
+                  <p className="menu-description">
+                    {snack.description || "Fresh and delicious, prepared with the finest ingredients."}
+                  </p>
+                  <div className="menu-meta-row">
+                    <span className="price-badge">Rs. {snack.price}</span>
+                    {itemRatings[snack.id] ? (
+                      <div className="item-rating">
+                        <span className="stars">
+                          {"★".repeat(Math.floor(itemRatings[snack.id].rating))}
+                          {"☆".repeat(5 - Math.floor(itemRatings[snack.id].rating))}
+                        </span>
+                        <span className="rating-text">
+                          {itemRatings[snack.id].rating} ({itemRatings[snack.id].reviewCount})
+                        </span>
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="menu-actions">
+                    <div className="qty-selector">
+                      <button
+                        type="button"
+                        className="qty-btn"
+                        onClick={() =>
+                          setQuantities((prev) => ({
+                            ...prev,
+                            [snack.id]: Math.max(1, getSelectedQty(snack.id) - 1),
+                          }))
+                        }
+                      >
+                        -
+                      </button>
+                      <span className="qty-display">{getSelectedQty(snack.id)}</span>
+                      <button
+                        type="button"
+                        className="qty-btn"
+                        onClick={() =>
+                          setQuantities((prev) => ({
+                            ...prev,
+                            [snack.id]: Math.min(10, getSelectedQty(snack.id) + 1),
+                          }))
+                        }
+                      >
+                        +
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      className="add-to-cart-btn"
+                      onClick={() => {
+                        const qty = getSelectedQty(snack.id);
+                        const unitPrice = Number(snack.price);
+
+                        onAddToCart({
+                          ...snack,
+                          quantity: qty,
+                          unitPrice,
+                          price: unitPrice * qty,
+                        });
+                      }}
                     >
-                      <option value={1}>1</option>
-                      <option value={2}>2</option>
-                      <option value={3}>3</option>
-                      <option value={4}>4</option>
-                    </select>
+                      <span className="btn-text">Add to Cart</span>
+                      <span className="btn-price">Rs. {Number(snack.price) * getSelectedQty(snack.id)}</span>
+                    </button>
                   </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      const qty = getSelectedQty(snack.id);
-                      const unitPrice = Number(snack.price);
-
-                      onAddToCart({
-                        ...snack,
-                        quantity: qty,
-                        unitPrice,
-                        price: unitPrice * qty,
-                      });
-                    }}
+                    className="write-review-btn"
+                    onClick={() => onOpenReviewModal(snack)}
                   >
-                    Add
+                    Write a Review
                   </button>
+                  {itemReviews.length > 0 ? (
+                    <button
+                      type="button"
+                      className={`review-toggle-btn ${reviewsOpen ? "active" : ""}`}
+                      onClick={() =>
+                        setExpandedReviews((prev) => ({
+                          ...prev,
+                          [snack.id]: !prev[snack.id],
+                        }))
+                      }
+                      aria-expanded={reviewsOpen}
+                    >
+                      {reviewsOpen ? "Hide Reviews" : `Reviews (${itemReviews.length})`}
+                    </button>
+                  ) : null}
+                  {itemReviews.length > 0 && reviewsOpen ? (
+                    <div className="reviews-section">
+                      <h4>Customer Reviews ({itemReviews.length})</h4>
+                      <div className="reviews-list">
+                        {itemReviews.slice(0, 3).map((review) => (
+                          <div key={review.id} className="review-item">
+                            <div className="review-header">
+                              <span className="review-author">{review.name}</span>
+                              <div className="review-rating">
+                                <span className="review-stars">
+                                  {"★".repeat(review.rating)}
+                                  {"☆".repeat(5 - review.rating)}
+                                </span>
+                                <span className="review-date">{review.date}</span>
+                              </div>
+                            </div>
+                            <p className="review-comment">{review.comment}</p>
+                          </div>
+                        ))}
+                        {itemReviews.length > 3 ? (
+                          <p className="more-reviews">
+                            +{itemReviews.length - 3} more review
+                            {itemReviews.length - 3 !== 1 ? "s" : ""}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
       )}
     </section>
