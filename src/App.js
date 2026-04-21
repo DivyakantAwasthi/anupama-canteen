@@ -365,6 +365,24 @@ const BrandLogosSection = () => {
   );
 };
 
+const HeroFloatingLogos = () => {
+  const heroLogos = [
+    { className: "hero-logo-card hero-logo-1", alt: "Anupama Canteen logo floating left" },
+    { className: "hero-logo-card hero-logo-2", alt: "Anupama Canteen logo floating center" },
+    { className: "hero-logo-card hero-logo-3", alt: "Anupama Canteen logo floating right" },
+  ];
+
+  return (
+    <div className="hero-floating-logos" aria-hidden="true">
+      {heroLogos.map((entry) => (
+        <div key={entry.className} className={entry.className}>
+          <img src="/logo.png" alt={entry.alt} loading="lazy" />
+        </div>
+      ))}
+    </div>
+  );
+};
+
 function App() {
   const [menuItems, setMenuItems] = useState([]);
   const [isMenuLoading, setIsMenuLoading] = useState(true);
@@ -1195,6 +1213,7 @@ function App() {
       </header>
 
       <section className="hero-section">
+        <HeroFloatingLogos />
         <div className="hero-content">
           <h2 className="hero-title">Delicious Food, Delivered Fast</h2>
           <p className="hero-subtitle">Fresh, hygienic meals prepared with love. Order now and enjoy!</p>
