@@ -3,6 +3,7 @@ const MENU_API_URL = process.env.REACT_APP_MENU_API_URL || "/api/menu";
 const APPEND_ORDER_ENDPOINT =
   process.env.REACT_APP_APPEND_ORDER_ENDPOINT || "/append-order";
 const DEFAULT_MENU_IMAGE = "/menu-placeholder.svg";
+const MENU_CACHE_KEY = "anupama:menu:cache:v1";
 const ORDER_POST_ACTION = process.env.REACT_APP_ORDER_POST_ACTION || "appendOrder";
 const TRACK_ORDER_ACTION = process.env.REACT_APP_TRACK_ORDER_ACTION || "trackOrder";
 const STABLE_MENU_IMAGE_BY_NAME = {
@@ -137,6 +138,38 @@ function normalizeMenuRow(rawRow, index) {
   };
 }
 
+const readCachedMenuItems = () => {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const raw = localStorage.getItem(MENU_CACHE_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.map((row, index) => normalizeMenuRow(row, index)).filter((row) => row && row.active);
+  } catch {
+    return [];
+  }
+};
+
+const writeCachedMenuItems = (items) => {
+  if (typeof window === "undefined" || !Array.isArray(items) || !items.length) {
+    return;
+  }
+
+  try {
+    localStorage.setItem(MENU_CACHE_KEY, JSON.stringify(items));
+  } catch {
+    // Ignore localStorage quota/security errors
+  }
+};
+
 export async function fetchActiveMenuItems() {
   const baseOrigin =
     typeof window !== "undefined" ? window.location.origin : "http://localhost";
@@ -165,12 +198,9 @@ export async function fetchActiveMenuItems() {
         : [];
   };
 
-  const candidates = [];
-  if (hasConfiguredValue(MENU_API_URL)) {
+  const candidates = [{ label: "menu_proxy", url: "/api/menu" }];
+  if (hasConfiguredValue(MENU_API_URL) && String(MENU_API_URL).trim() !== "/api/menu") {
     candidates.push({ label: "menu_api_url", url: MENU_API_URL });
-  }
-  if (!candidates.some((candidate) => String(candidate.url).trim() === "/api/menu")) {
-    candidates.push({ label: "menu_proxy", url: "/api/menu" });
   }
   if (hasConfiguredValue(ORDERS_API_URL)) {
     candidates.push({ label: "orders_api_url", url: ORDERS_API_URL });
@@ -183,12 +213,21 @@ export async function fetchActiveMenuItems() {
   for (const candidate of candidates) {
     try {
       const rows = await readMenuRows(candidate.url);
-      return rows
+      const normalizedRows = rows
         .map((row, index) => normalizeMenuRow(row, index))
         .filter((row) => row && row.active);
+      if (normalizedRows.length) {
+        writeCachedMenuItems(normalizedRows);
+      }
+      return normalizedRows;
     } catch (error) {
       attempts.push(`${candidate.label}: ${error?.message || "failed"}`);
     }
+  }
+
+  const cachedItems = readCachedMenuItems();
+  if (cachedItems.length) {
+    return cachedItems;
   }
 
   throw new Error(`Unable to fetch menu items from API. ${attempts.join(" | ")}`);
