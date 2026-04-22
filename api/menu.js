@@ -4,18 +4,7 @@ module.exports = async (req, res) => {
     return res.status(405).json({ error: "method_not_allowed" });
   }
 
-  const ORDERS_API_URL = String(
-    process.env.ORDERS_API_URL ||
-      process.env.REACT_APP_ORDERS_API_URL ||
-      process.env.MENU_API_URL ||
-      process.env.REACT_APP_MENU_API_URL ||
-      ""
-  ).trim();
-  
-  if (!ORDERS_API_URL || ORDERS_API_URL.startsWith("YOUR_") || ORDERS_API_URL.includes("<")) {
-    console.error("[API/Menu] ORDERS_API_URL not configured");
-    return res.status(500).json({ error: "ORDERS_API_URL_not_configured" });
-  }
+  const ORDERS_API_URL = "https://script.google.com/macros/s/AKfycbzryN3AnMCu3m2QDT4DerbFepEL2dZuGCynXVzF8QPQ_0NUyoMDJ18GpazFRVs-lFfG4w/exec";
 
   const REQUEST_TIMEOUT_MS = 5000; // 5 second timeout (reduced from 8)
   const MAX_RETRIES = 2;
@@ -96,6 +85,7 @@ module.exports = async (req, res) => {
         }
 
         console.log(`[API/Menu] Successfully fetched menu from upstream`);
+        console.log(`[API/Menu] Returning ${payload.items ? payload.items.length : Array.isArray(payload) ? payload.length : 0} items`);
         return res.status(200).json(payload);
       } catch (error) {
         lastError = error;

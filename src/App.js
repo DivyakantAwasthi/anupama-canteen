@@ -414,6 +414,13 @@ function App() {
     [menuItems]
   );
 
+  const menuStats = useMemo(() => {
+    const total = menuItems.length;
+    const available = menuItems.filter(item => item.active).length;
+    const unavailable = total - available;
+    return { total, available, unavailable };
+  }, [menuItems]);
+
   const categories = useMemo(() => {
     const values = menuItemsWithCategory.map((item) => item.category);
     return [ALL_CATEGORIES, ...Array.from(new Set(values))];
@@ -1352,6 +1359,7 @@ function App() {
         <Menu
           snacks={filteredMenuItems}
           totalSnackCount={menuItemsWithCategory.length}
+          menuStats={menuStats}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           categories={categories}

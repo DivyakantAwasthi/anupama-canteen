@@ -19,6 +19,7 @@ const REVIEW_SORT_OPTIONS = [
 function Menu({
   snacks,
   totalSnackCount,
+  menuStats,
   searchQuery,
   onSearchChange,
   categories,
@@ -97,7 +98,8 @@ function Menu({
       <div className="panel-head">
         <h2 id="snack-menu">Snack Menu</h2>
         <span className="panel-label">
-          Showing {snacks.length} of {totalSnackCount}
+          Showing {snacks.length} of {totalSnackCount} • Total: {menuStats.available} available, {menuStats.unavailable} unavailable
+        </span>
         </span>
       </div>
 

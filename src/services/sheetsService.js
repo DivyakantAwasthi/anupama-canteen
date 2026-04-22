@@ -334,6 +334,9 @@ export async function fetchActiveMenuItems() {
         console.log(
           `[Menu Fetch] Successfully loaded ${normalizedRows.length} items from ${candidate.label}`
         );
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[Menu Fetch] Raw API count: ${rows.length}, Filtered active: ${normalizedRows.length}`);
+        }
         return normalizedRows;
       }
     } catch (error) {
@@ -357,6 +360,10 @@ export async function fetchActiveMenuItems() {
     "[Menu Fetch] All API endpoints failed and no cache available. Using fallback menu data."
   );
   console.warn(`[Menu Fetch] Failed attempts: ${attempts.join(" | ")}`);
+  console.log(`[Menu Fetch] Fallback menu has ${FALLBACK_MENU_DATA.length} items`);
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[Menu Fetch] Using fallback due to API failures`);
+  }
   return FALLBACK_MENU_DATA;
 }
 
