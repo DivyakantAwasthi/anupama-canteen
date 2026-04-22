@@ -367,25 +367,6 @@ const BrandLogosSection = () => {
   );
 };
 
-const HeroFloatingLogos = () => {
-  const heroLogos = [
-    { className: "hero-logo-card hero-logo-1", src: amul, alt: "Amul brand logo" },
-    { className: "hero-logo-card hero-logo-2", src: coke, alt: "Coca-Cola brand logo" },
-    { className: "hero-logo-card hero-logo-3", src: maggi, alt: "Maggi brand logo" },
-    { className: "hero-logo-card hero-logo-4", src: nestle, alt: "Nestle brand logo" },
-  ];
-
-  return (
-    <div className="hero-floating-logos" aria-hidden="true">
-      {heroLogos.map((entry) => (
-        <div key={entry.className} className={entry.className}>
-          <img src={entry.src} alt={entry.alt} loading="lazy" />
-        </div>
-      ))}
-    </div>
-  );
-};
-
 function App() {
   const [menuItems, setMenuItems] = useState([]);
   const [isMenuLoading, setIsMenuLoading] = useState(true);
@@ -1167,8 +1148,7 @@ function App() {
     setTrackingError("");
 
     const trimmed = trackOrderIdInput.trim();
-    const parsedId = Number(trimmed);
-
+    const
     if (!trimmed || !Number.isInteger(parsedId) || parsedId <= 0) {
       setTrackedOrder(null);
       setTrackingError("Enter a valid numeric order ID.");
@@ -1262,7 +1242,6 @@ function App() {
         <div className="hero-background">
           <div className="hero-gradient"></div>
         </div>
-        <HeroFloatingLogos />
         <div className="hero-container">
           <div className="hero-content">
             <h1 className="hero-title">
@@ -1283,7 +1262,7 @@ function App() {
                 🍽️ Order Now
               </button>
               <button className="hero-secondary-btn" onClick={() => {
-                const target = document.getElementById("menu-section");
+                const target = document.getElementById("snack-menu");
                 if (!target) return;
                 target.scrollIntoView({ behavior: "smooth", block: "start" });
               }}>
@@ -1312,11 +1291,6 @@ function App() {
           <div className="hero-visual">
             <div className="hero-image-container">
               <img src="/menu-placeholder.svg" alt="Delicious food" className="hero-main-image" />
-              <div className="hero-image-decoration">
-                <div className="decoration-emoji decoration-1">🍛</div>
-                <div className="decoration-emoji decoration-2">🍕</div>
-                <div className="decoration-emoji decoration-3">🥗</div>
-              </div>
             </div>
           </div>
         </div>
@@ -1374,7 +1348,7 @@ function App() {
           </div>
         </div>
       </section>
-      <main className="main-layout">
+      <main className="main-layout" id="menu-section">
         <Menu
           snacks={filteredMenuItems}
           totalSnackCount={menuItemsWithCategory.length}
@@ -1619,3 +1593,6 @@ function App() {
 }
 
 export default App;
+
+
+

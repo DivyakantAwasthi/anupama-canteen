@@ -95,7 +95,7 @@ function Menu({
   return (
     <section className="panel">
       <div className="panel-head">
-        <h2>Snack Menu</h2>
+        <h2 id="snack-menu">Snack Menu</h2>
         <span className="panel-label">
           Showing {snacks.length} of {totalSnackCount}
         </span>
