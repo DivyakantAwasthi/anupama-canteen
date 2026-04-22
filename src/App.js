@@ -1148,7 +1148,7 @@ function App() {
     setTrackingError("");
 
     const trimmed = trackOrderIdInput.trim();
-    const
+    const parsedId = Number(trimmed);
     if (!trimmed || !Number.isInteger(parsedId) || parsedId <= 0) {
       setTrackedOrder(null);
       setTrackingError("Enter a valid numeric order ID.");
