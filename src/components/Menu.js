@@ -100,7 +100,6 @@ function Menu({
         <span className="panel-label">
           Showing {snacks.length} of {totalSnackCount} • Total: {menuStats.available} available, {menuStats.unavailable} unavailable
         </span>
-        </span>
       </div>
 
       <div className="menu-toolbar">
