@@ -367,16 +367,19 @@ const BrandLogosSection = () => {
 
 const HeroFloatingLogos = () => {
   const heroLogos = [
-    { className: "hero-logo-card hero-logo-1", alt: "Anupama Canteen logo floating left" },
-    { className: "hero-logo-card hero-logo-2", alt: "Anupama Canteen logo floating center" },
-    { className: "hero-logo-card hero-logo-3", alt: "Anupama Canteen logo floating right" },
+    { className: "hero-logo-card hero-logo-1", src: amul, alt: "Amul brand logo floating" },
+    { className: "hero-logo-card hero-logo-2", src: campa, alt: "Campa Cola brand logo floating" },
+    { className: "hero-logo-card hero-logo-3", src: coke, alt: "Coca-Cola brand logo floating" },
+    { className: "hero-logo-card hero-logo-4", src: heinz, alt: "Heinz brand logo floating" },
+    { className: "hero-logo-card hero-logo-5", src: maggi, alt: "Maggi brand logo floating" },
+    { className: "hero-logo-card hero-logo-6", src: nestle, alt: "Nestle brand logo floating" },
   ];
 
   return (
     <div className="hero-floating-logos" aria-hidden="true">
       {heroLogos.map((entry) => (
         <div key={entry.className} className={entry.className}>
-          <img src="/logo.png" alt={entry.alt} loading="lazy" />
+          <img src={entry.src} alt={entry.alt} loading="lazy" />
         </div>
       ))}
     </div>
@@ -1215,29 +1218,51 @@ function App() {
       <section className="hero-section">
         <HeroFloatingLogos />
         <div className="hero-content">
-          <h2 className="hero-title">Delicious Food, Delivered Fast</h2>
-          <p className="hero-subtitle">Fresh, hygienic meals prepared with love. Order now and enjoy!</p>
-          <div className="hero-features">
-            <div className="hero-feature">
-              <span className="feature-icon">⚡</span>
+          <h2 className="hero-title">Craving Something Delicious?</h2>
+          <p className="hero-subtitle">Fresh, hygienic meals made with love. Premium ingredients, authentic flavors, delivered hot and fast.</p>
+          <div className="hero-ctas">
+            <button className="hero-primary-btn" onClick={() => {
+              const target = document.getElementById("menu-search");
+              if (!target) return;
+              target.scrollIntoView({ behavior: "smooth", block: "center" });
+              target.focus();
+            }}>
+              Order Now
+            </button>
+            <button className="hero-secondary-btn" onClick={() => {
+              const target = document.getElementById("menu-section");
+              if (!target) return;
+              target.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}>
+              View Menu
+            </button>
+          </div>
+          <div className="hero-trust-badges">
+            <div className="trust-badge">
+              <span className="trust-icon">⚡</span>
               <span>Fast Delivery</span>
             </div>
-            <div className="hero-feature">
-              <span className="feature-icon">🛡️</span>
+            <div className="trust-badge">
+              <span className="trust-icon">🛡️</span>
               <span>Hygienic & Fresh</span>
             </div>
-            <div className="hero-feature">
-              <span className="feature-icon">💳</span>
+            <div className="trust-badge">
+              <span className="trust-icon">💳</span>
               <span>Easy Payment</span>
+            </div>
+            <div className="trust-badge">
+              <span className="trust-icon">⭐</span>
+              <span>Best Rated</span>
             </div>
           </div>
         </div>
-        <div className="hero-image">
-          <div className="hero-food-collage">
-            <img src="/menu-placeholder.svg" alt="Delicious food" className="food-item food-1" />
-            <img src="/menu-placeholder.svg" alt="Fresh snacks" className="food-item food-2" />
-            <img src="/menu-placeholder.svg" alt="Hot meals" className="food-item food-3" />
+        <div className="hero-visual">
+          <div className="hero-food-showcase">
+            <img src="/menu-placeholder.svg" alt="Delicious food" className="showcase-item showcase-1" />
+            <img src="/menu-placeholder.svg" alt="Fresh snacks" className="showcase-item showcase-2" />
+            <img src="/menu-placeholder.svg" alt="Hot meals" className="showcase-item showcase-3" />
           </div>
+          <div className="hero-glow-effect"></div>
         </div>
       </section>
 
