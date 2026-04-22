@@ -17,7 +17,7 @@ module.exports = async (req, res) => {
     return res.status(500).json({ error: "ORDERS_API_URL_not_configured" });
   }
 
-  const REQUEST_TIMEOUT_MS = 8000; // 8 second timeout
+  const REQUEST_TIMEOUT_MS = 5000; // 5 second timeout (reduced from 8)
   const MAX_RETRIES = 2;
   
   console.log(`[API/Menu] Fetching from: ${ORDERS_API_URL}`);

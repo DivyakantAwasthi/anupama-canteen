@@ -138,7 +138,7 @@ function normalizeMenuRow(rawRow, index) {
   };
 }
 
-const readCachedMenuItems = () => {
+export const readCachedMenuItems = () => {
   if (typeof window === "undefined") {
     return [];
   }
@@ -171,7 +171,7 @@ const writeCachedMenuItems = (items) => {
 };
 
 // Fallback menu data - ensures app works even if API is down
-const FALLBACK_MENU_DATA = [
+export const FALLBACK_MENU_DATA = [
   {
     id: "fallback-1",
     name: "Vada Pav",

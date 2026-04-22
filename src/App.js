@@ -6,6 +6,8 @@ import {
   appendOrderToSheet,
   fetchActiveMenuItems,
   fetchOrderStatusFromSheet,
+  readCachedMenuItems,
+  FALLBACK_MENU_DATA,
 } from "./services/sheetsService";
 import { fetchReviewsByItemIds, saveReviewForItem } from "./services/reviewService";
 import { sendWhatsAppStatusNotification } from "./services/whatsappService";
@@ -20,7 +22,7 @@ import mdh from "./assets/brands/mdh.png";
 import nestle from "./assets/brands/nestle.png";
 import veeba from "./assets/brands/veeba.png";
 
-const MENU_REFRESH_INTERVAL_MS = 30000;
+const MENU_REFRESH_INTERVAL_MS = 300000; // 5 minutes instead of 30 seconds
 const STATUS_TICK_INTERVAL_MS = 1000;
 const DEFAULT_CATEGORY = "Popular";
 const ALL_CATEGORIES = "All";
@@ -367,12 +369,10 @@ const BrandLogosSection = () => {
 
 const HeroFloatingLogos = () => {
   const heroLogos = [
-    { className: "hero-logo-card hero-logo-1", src: amul, alt: "Amul brand logo floating" },
-    { className: "hero-logo-card hero-logo-2", src: campa, alt: "Campa Cola brand logo floating" },
-    { className: "hero-logo-card hero-logo-3", src: coke, alt: "Coca-Cola brand logo floating" },
-    { className: "hero-logo-card hero-logo-4", src: heinz, alt: "Heinz brand logo floating" },
-    { className: "hero-logo-card hero-logo-5", src: maggi, alt: "Maggi brand logo floating" },
-    { className: "hero-logo-card hero-logo-6", src: nestle, alt: "Nestle brand logo floating" },
+    { className: "hero-logo-card hero-logo-1", src: amul, alt: "Amul brand logo" },
+    { className: "hero-logo-card hero-logo-2", src: coke, alt: "Coca-Cola brand logo" },
+    { className: "hero-logo-card hero-logo-3", src: maggi, alt: "Maggi brand logo" },
+    { className: "hero-logo-card hero-logo-4", src: nestle, alt: "Nestle brand logo" },
   ];
 
   return (
@@ -617,34 +617,77 @@ function App() {
   }, [trackedOrder, statusNowMs]);
 
   const loadMenu = useCallback(async (options = {}) => {
-    const { silent = false } = options;
+    const { silent = false, force = false } = options;
 
-    if (!silent) {
+    // Always try to show cached data immediately for better UX
+    const cachedItems = readCachedMenuItems();
+    if (cachedItems.length > 0 && !force) {
+      setMenuItems(cachedItems);
+      setIsMenuLoading(false);
+
+      // Load reviews for cached items
+      const itemIds = cachedItems.map((item) => item.id);
+      try {
+        const reviewsData = await fetchReviewsByItemIds(itemIds);
+        const ratings = getRatingsFromReviews(cachedItems, reviewsData);
+        setReviews(reviewsData);
+        setItemRatings(ratings);
+      } catch {
+        // Use demo reviews if API fails
+        const demoReviews = {};
+        cachedItems.forEach((item) => {
+          demoReviews[item.id] = generateDemoReviews(item.name);
+        });
+        const ratings = getRatingsFromReviews(cachedItems, demoReviews);
+        setReviews(demoReviews);
+        setItemRatings(ratings);
+      }
+    } else if (!force) {
+      // Show fallback menu immediately if no cached data
+      setMenuItems(FALLBACK_MENU_DATA);
+      setIsMenuLoading(false);
+
+      // Load demo reviews for fallback items
+      const demoReviews = {};
+      FALLBACK_MENU_DATA.forEach((item) => {
+        demoReviews[item.id] = generateDemoReviews(item.name);
+      });
+      const ratings = getRatingsFromReviews(FALLBACK_MENU_DATA, demoReviews);
+      setReviews(demoReviews);
+      setItemRatings(ratings);
+    }
+
+    if (!silent && cachedItems.length === 0 && !force) {
       setIsMenuLoading(true);
       setMenuError("");
     }
 
     try {
       const items = await fetchActiveMenuItems();
-      setMenuItems(items);
+      const hasNewData = items.length !== cachedItems.length ||
+        JSON.stringify(items) !== JSON.stringify(cachedItems);
 
-      const itemIds = items.map((item) => item.id);
-      let reviewsData = {};
-      try {
-        reviewsData = await fetchReviewsByItemIds(itemIds);
-      } catch {
-        // Fallback keeps UI usable when reviews backend is not yet configured.
-        reviewsData = {};
-        items.forEach((item) => {
-          reviewsData[item.id] = generateDemoReviews(item.name);
-        });
+      if (hasNewData || force) {
+        setMenuItems(items);
+
+        const itemIds = items.map((item) => item.id);
+        let reviewsData = {};
+        try {
+          reviewsData = await fetchReviewsByItemIds(itemIds);
+        } catch {
+          // Fallback keeps UI usable when reviews backend is not yet configured.
+          reviewsData = {};
+          items.forEach((item) => {
+            reviewsData[item.id] = generateDemoReviews(item.name);
+          });
+        }
+
+        const ratings = getRatingsFromReviews(items, reviewsData);
+        setReviews(reviewsData);
+        setItemRatings(ratings);
       }
-
-      const ratings = getRatingsFromReviews(items, reviewsData);
-      setReviews(reviewsData);
-      setItemRatings(ratings);
     } catch (error) {
-      if (!silent) {
+      if (!silent && cachedItems.length === 0) {
         setMenuError(
           error?.message || "Unable to load menu right now. Please try again."
         );
@@ -1216,53 +1259,66 @@ function App() {
       </header>
 
       <section className="hero-section">
-        <HeroFloatingLogos />
-        <div className="hero-content">
-          <h2 className="hero-title">Craving Something Delicious?</h2>
-          <p className="hero-subtitle">Fresh, hygienic meals made with love. Premium ingredients, authentic flavors, delivered hot and fast.</p>
-          <div className="hero-ctas">
-            <button className="hero-primary-btn" onClick={() => {
-              const target = document.getElementById("menu-search");
-              if (!target) return;
-              target.scrollIntoView({ behavior: "smooth", block: "center" });
-              target.focus();
-            }}>
-              Order Now
-            </button>
-            <button className="hero-secondary-btn" onClick={() => {
-              const target = document.getElementById("menu-section");
-              if (!target) return;
-              target.scrollIntoView({ behavior: "smooth", block: "start" });
-            }}>
-              View Menu
-            </button>
-          </div>
-          <div className="hero-trust-badges">
-            <div className="trust-badge">
-              <span className="trust-icon">⚡</span>
-              <span>Fast Delivery</span>
-            </div>
-            <div className="trust-badge">
-              <span className="trust-icon">🛡️</span>
-              <span>Hygienic & Fresh</span>
-            </div>
-            <div className="trust-badge">
-              <span className="trust-icon">💳</span>
-              <span>Easy Payment</span>
-            </div>
-            <div className="trust-badge">
-              <span className="trust-icon">⭐</span>
-              <span>Best Rated</span>
-            </div>
-          </div>
+        <div className="hero-background">
+          <div className="hero-gradient"></div>
         </div>
-        <div className="hero-visual">
-          <div className="hero-food-showcase">
-            <img src="/menu-placeholder.svg" alt="Delicious food" className="showcase-item showcase-1" />
-            <img src="/menu-placeholder.svg" alt="Fresh snacks" className="showcase-item showcase-2" />
-            <img src="/menu-placeholder.svg" alt="Hot meals" className="showcase-item showcase-3" />
+        <HeroFloatingLogos />
+        <div className="hero-container">
+          <div className="hero-content">
+            <h1 className="hero-title">
+              Fresh Food,<br />
+              <span className="hero-title-accent">Fast Delivery</span>
+            </h1>
+            <p className="hero-subtitle">
+              Premium quality meals prepared with care. From traditional favorites to modern delights,
+              delivered hot and fresh to your doorstep.
+            </p>
+            <div className="hero-actions">
+              <button className="hero-primary-btn" onClick={() => {
+                const target = document.getElementById("menu-search");
+                if (!target) return;
+                target.scrollIntoView({ behavior: "smooth", block: "center" });
+                target.focus();
+              }}>
+                🍽️ Order Now
+              </button>
+              <button className="hero-secondary-btn" onClick={() => {
+                const target = document.getElementById("menu-section");
+                if (!target) return;
+                target.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}>
+                📖 View Menu
+              </button>
+            </div>
+            <div className="hero-features">
+              <div className="feature-item">
+                <span className="feature-icon">⚡</span>
+                <span>Under 30 mins</span>
+              </div>
+              <div className="feature-item">
+                <span className="feature-icon">⭐</span>
+                <span>4.8/5 Rating</span>
+              </div>
+              <div className="feature-item">
+                <span className="feature-icon">🛡️</span>
+                <span>Hygienic & Fresh</span>
+              </div>
+              <div className="feature-item">
+                <span className="feature-icon">💳</span>
+                <span>Easy Payment</span>
+              </div>
+            </div>
           </div>
-          <div className="hero-glow-effect"></div>
+          <div className="hero-visual">
+            <div className="hero-image-container">
+              <img src="/menu-placeholder.svg" alt="Delicious food" className="hero-main-image" />
+              <div className="hero-image-decoration">
+                <div className="decoration-emoji decoration-1">🍛</div>
+                <div className="decoration-emoji decoration-2">🍕</div>
+                <div className="decoration-emoji decoration-3">🥗</div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
