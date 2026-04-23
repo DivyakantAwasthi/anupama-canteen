@@ -633,7 +633,7 @@ export async function appendOrderToSheet(orderData) {
 
   if (!hasConfiguredValue(ORDERS_API_URL)) {
     throw new Error(
-      `Unable to write order: append-order proxy failed and REACT_APP_ORDERS_API_URL is not configured. Attempts: ${requestAttempts.join(
+      `Order temporarily unavailable. Please call us directly. Attempts: ${requestAttempts.join(
         " | "
       )}`
     );
@@ -700,7 +700,7 @@ export async function appendOrderToSheet(orderData) {
     return { ok: true, orderId: getResult.orderId || toPositiveInt(orderData?.orderId) };
   }
 
-  throw new Error(`Unable to write order to Sheets: ${requestAttempts.join(" | ")}`);
+  throw new Error(`Order temporarily unavailable. Please call us directly. Technical: ${requestAttempts.join(" | ")}`);
 }
 
 const parseTrackPayload = (payload, requestedOrderId) => {

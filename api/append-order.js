@@ -120,14 +120,7 @@ module.exports = async (req, res) => {
     return res.status(405).json({ error: "method_not_allowed" });
   }
 
-  const ORDERS_API_URL = String(
-    process.env.ORDERS_API_URL ||
-      process.env.REACT_APP_ORDERS_API_URL ||
-      process.env.MENU_API_URL ||
-      process.env.REACT_APP_MENU_API_URL ||
-      ""
-  ).trim();
-  if (!ORDERS_API_URL || ORDERS_API_URL.startsWith("YOUR_") || ORDERS_API_URL.includes("<")) {
+  const ORDERS_API_URL = "https://script.google.com/macros/s/AKfycbzryN3AnMCu3m2QDT4DerbFepEL2dZuGCynXVzF8QPQ_0NUyoMDJ18GpazFRVs-lFfG4w/exec";
     return res.status(500).json({ error: "ORDERS_API_URL_not_configured" });
   }
 
