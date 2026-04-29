@@ -1,5 +1,8 @@
 const REVIEWS_ENDPOINT =
   process.env.REACT_APP_REVIEWS_ENDPOINT || "/api/reviews";
+const REVIEWS_CACHE_KEY = "anupama:reviews:cache:v1";
+
+let inFlightReviewsRequest = null;
 
 const parseReview = (rawReview) => {
   if (!rawReview || typeof rawReview !== "object") {
@@ -45,23 +48,56 @@ export async function fetchReviewsByItemIds(itemIds = []) {
     return {};
   }
 
-  const response = await fetch(
-    `${REVIEWS_ENDPOINT}?itemIds=${encodeURIComponent(normalizedIds.join(","))}`,
-    {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-      },
+  try {
+    const cached = JSON.parse(localStorage.getItem(REVIEWS_CACHE_KEY) || "{}");
+    const cacheKey = normalizedIds.join(",");
+    if (cached[cacheKey]) {
+      return cached[cacheKey];
     }
-  );
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`Unable to fetch reviews (HTTP ${response.status}) ${text}`.trim());
+  } catch {
+    // Ignore cache read errors.
   }
 
-  const payload = await response.json();
-  return normalizeReviewsByItem(payload, normalizedIds);
+  if (inFlightReviewsRequest) {
+    return inFlightReviewsRequest;
+  }
+
+  inFlightReviewsRequest = (async () => {
+    const response = await fetch(
+      `${REVIEWS_ENDPOINT}?itemIds=${encodeURIComponent(normalizedIds.join(","))}`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`Unable to fetch reviews (HTTP ${response.status}) ${text}`.trim());
+    }
+
+    const payload = await response.json();
+    const normalized = normalizeReviewsByItem(payload, normalizedIds);
+
+    try {
+      const cacheKey = normalizedIds.join(",");
+      const cached = JSON.parse(localStorage.getItem(REVIEWS_CACHE_KEY) || "{}");
+      cached[cacheKey] = normalized;
+      localStorage.setItem(REVIEWS_CACHE_KEY, JSON.stringify(cached));
+    } catch {
+      // Ignore cache write errors.
+    }
+
+    return normalized;
+  })();
+
+  try {
+    return await inFlightReviewsRequest;
+  } finally {
+    inFlightReviewsRequest = null;
+  }
 }
 
 export async function saveReviewForItem({ itemId, review }) {

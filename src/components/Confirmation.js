@@ -1,180 +1,133 @@
 import { QRCodeCanvas } from "qrcode.react";
+import { createWhatsAppOrderLink } from "../config/site";
 
-const STATUS_STEPS = [
-  { id: "pending_payment", label: "Awaiting payment" },
-  { id: "payment_verified", label: "Payment verified" },
-  { id: "preparing", label: "Preparing order" },
-  { id: "ready_for_pickup", label: "Ready for pickup" },
-  { id: "delivered", label: "Delivered" },
-];
-
-const STATUS_MESSAGE = {
-  pending_payment: "Please complete the payment to start your order.",
-  payment_verified: "Payment is verified. Your order will move to preparation soon.",
-  preparing: "Kitchen is preparing your order now.",
-  ready_for_pickup: "Your order is ready. Please collect it at the counter.",
-  delivered: "Your order is delivered through Porter app. Thank you for ordering.",
-  cancelled: "This order has been cancelled. Contact support if needed.",
+const ORDER_STATUS_COPY = {
+  pending_payment: "Awaiting payment confirmation",
+  payment_verified: "Payment received",
+  preparing: "Kitchen is preparing your order",
+  ready_for_pickup: "Order is ready for pickup",
+  delivered: "Order completed",
+  cancelled: "Order cancelled",
 };
-
-function getStepState(orderStatus, stepId) {
-  const currentIndex = STATUS_STEPS.findIndex((step) => step.id === orderStatus);
-  const stepIndex = STATUS_STEPS.findIndex((step) => step.id === stepId);
-
-  if (stepIndex < currentIndex) {
-    return "done";
-  }
-
-  if (stepIndex === currentIndex) {
-    return "active";
-  }
-
-  return "todo";
-}
 
 function Confirmation({
   order,
   onConfirmPayment,
   onSelectCashAtCounter,
   onNewOrder,
+  business,
 }) {
-  const upiId = String(process.env.REACT_APP_UPI_ID || "9807980222@ptsbi")
-    .trim()
-    .toLowerCase();
-  const payeeName = process.env.REACT_APP_UPI_PAYEE_NAME || "Utkarsh Shukla";
-
-  const amount = (order?.total || 0).toFixed(2);
-  const note = `Order ${order?.orderId || "-"}`;
-  const upiQuery = `pa=${upiId}&pn=${encodeURIComponent(payeeName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(
-    note
-  )}`;
-  const qrValue = `upi://pay?${upiQuery}`;
-  const encodedUpiPath = qrValue.replace(/^upi:\/\//, "");
-  const gpayIntentUrl = `intent://${encodedUpiPath}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`;
-  const paytmIntentUrl = `intent://${encodedUpiPath}#Intent;scheme=upi;package=net.one97.paytm;end`;
-  const gpayIosUrl = `gpay://upi/pay?${upiQuery}`;
-  const paytmIosUrl = `paytmmp://upi/pay?${upiQuery}`;
-
-  const openPaymentApp = (target) => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const isIOS = /iphone|ipad|ipod/i.test(window.navigator.userAgent || "");
-    const isAndroid = /android/i.test(window.navigator.userAgent || "");
-    const urlByTarget = {
-      any: qrValue,
-      gpay: isAndroid ? gpayIntentUrl : isIOS ? gpayIosUrl : qrValue,
-      paytm: isAndroid ? paytmIntentUrl : isIOS ? paytmIosUrl : qrValue,
-    };
-
-    window.location.href = urlByTarget[target] || qrValue;
-
-    // iOS Safari may refuse custom schemes if app isn't installed; fallback to generic UPI.
-    if (isIOS && ["gpay", "paytm"].includes(target)) {
-      setTimeout(() => {
-        if (!document.hidden) {
-          window.location.href = qrValue;
-        }
-      }, 900);
-    }
-  };
-
   if (!order) {
     return null;
   }
 
+  const upiId = String(process.env.REACT_APP_UPI_ID || "9807980222@ptsbi")
+    .trim()
+    .toLowerCase();
+  const payeeName = process.env.REACT_APP_UPI_PAYEE_NAME || "Utkarsh Shukla";
+  const amount = Number(order.total || 0).toFixed(2);
+  const note = `Order ${order.orderId}`;
+  const upiLink = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(
+    payeeName
+  )}&am=${amount}&cu=INR&tn=${encodeURIComponent(note)}`;
+  const whatsappLink = createWhatsAppOrderLink({
+    orderId: order.orderId,
+    customerName: order.customer?.name,
+    total: order.total,
+    items: order.items,
+  });
   const isPaid = Boolean(order.paidAt);
-  const isCashAtCounter = order.paymentMode === "cash_counter";
+  const isCashOrder = order.paymentMode === "cash_counter";
 
   return (
-    <section className="panel confirmation-panel">
-      <h2>{isPaid ? "Order in Progress" : "Awaiting Payment"}</h2>
-      <p className="muted-text">
-        {STATUS_MESSAGE[order.status] || "Status updated. Please check again shortly."}
-      </p>
+    <section className="confirmation-shell">
+      <div className="confirmation-card">
+        <p className="eyebrow">Order received</p>
+        <h1>Thanks, {order.customer?.name || "guest"}.</h1>
+        <p className="confirmation-lead">
+          Your order has been saved. Use the payment option below to move it into the kitchen
+          queue.
+        </p>
 
-      <p>
-        <strong>Order ID:</strong> {order.orderId}
-      </p>
-      <p>
-        <strong>Total:</strong> Rs. {amount}
-      </p>
+        <div className="confirmation-grid">
+          <div className="confirmation-summary">
+            <div className="summary-tile">
+              <span>Order ID</span>
+              <strong>#{order.orderId}</strong>
+            </div>
+            <div className="summary-tile">
+              <span>Status</span>
+              <strong>{ORDER_STATUS_COPY[order.status] || order.status}</strong>
+            </div>
+            <div className="summary-tile">
+              <span>Total</span>
+              <strong>Rs. {amount}</strong>
+            </div>
+            <div className="summary-tile">
+              <span>Support</span>
+              <strong>{business.displayPhone}</strong>
+            </div>
+          </div>
 
-      <ol className="status-timeline">
-        {STATUS_STEPS.map((step) => {
-          const state = getStepState(order.status, step.id);
-          return (
-            <li key={step.id} className={`status-step ${state}`}>
-              {step.label}
-            </li>
-          );
-        })}
-      </ol>
+          <div className="confirmation-payment">
+            {!isPaid && !isCashOrder ? (
+              <>
+                <div className="qr-card">
+                  <QRCodeCanvas value={upiLink} size={200} includeMargin />
+                </div>
+                <p className="muted-copy">Scan to pay via UPI</p>
+                <div className="confirmation-actions">
+                  <a href={upiLink} className="primary-btn">
+                    Open UPI app
+                  </a>
+                  <button
+                    type="button"
+                    className="soft-btn"
+                    onClick={onConfirmPayment}
+                    disabled={order.saving}
+                  >
+                    {order.saving ? "Confirming..." : "I have paid"}
+                  </button>
+                  <button
+                    type="button"
+                    className="soft-btn"
+                    onClick={onSelectCashAtCounter}
+                    disabled={order.saving}
+                  >
+                    Pay at counter
+                  </button>
+                </div>
+                <p className="muted-copy">UPI ID: {upiId}</p>
+              </>
+            ) : null}
 
-      {!isPaid ? (
-        <>
-          {!isCashAtCounter ? (
-            <>
-              <div className="qr-wrap">
-                <QRCodeCanvas value={qrValue} size={220} includeMargin />
+            {isCashOrder && !isPaid ? (
+              <div className="status-card">
+                <p>Cash at counter is selected. Please pay when you collect your order.</p>
               </div>
-              <p className="muted-text">Scan to pay via UPI</p>
-              <div className="payment-app-actions">
-                <button type="button" onClick={() => openPaymentApp("any")}>
-                  Open Payment App
-                </button>
-                <button
-                  type="button"
-                  className="secondary-btn"
-                  onClick={() => openPaymentApp("gpay")}
-                >
-                  Google Pay
-                </button>
-                <button
-                  type="button"
-                  className="secondary-btn"
-                  onClick={() => openPaymentApp("paytm")}
-                >
-                  Paytm
-                </button>
-                <button
-                  type="button"
-                  className="secondary-btn"
-                  onClick={onSelectCashAtCounter}
-                  disabled={order.saving}
-                >
-                  Cash at Counter
-                </button>
+            ) : null}
+
+            {isPaid ? (
+              <div className="status-card success">
+                <p>Your payment has been recorded. We&apos;ll keep your order status updated.</p>
               </div>
-              <p className="muted-text">
-                <strong>UPI ID:</strong> {upiId}
-              </p>
-            </>
-          ) : (
-            <p className="muted-text">
-              Cash at counter selected. Please pay at pickup counter to continue order processing.
-            </p>
-          )}
-        </>
-      ) : null}
+            ) : null}
+          </div>
+        </div>
 
-      {order.error ? <p className="error-text">{order.error}</p> : null}
+        {order.error ? <p className="inline-error">{order.error}</p> : null}
 
-      <div className="confirmation-actions">
-        {!isPaid ? (
-          <button type="button" onClick={onConfirmPayment} disabled={order.saving}>
-            {order.saving ? "Confirming..." : "I have paid (confirm)"}
+        <div className="support-actions">
+          <a href={whatsappLink} target="_blank" rel="noreferrer" className="soft-btn">
+            WhatsApp support
+          </a>
+          <a href={business.callLink} className="soft-btn">
+            Call {business.displayPhone}
+          </a>
+          <button type="button" className="link-btn" onClick={onNewOrder}>
+            Start another order
           </button>
-        ) : null}
-        <button
-          type="button"
-          className="secondary-btn"
-          onClick={onNewOrder}
-          disabled={order.saving}
-        >
-          {isPaid ? "Place New Order" : "Cancel"}
-        </button>
+        </div>
       </div>
     </section>
   );

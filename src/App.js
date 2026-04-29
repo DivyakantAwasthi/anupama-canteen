@@ -1,118 +1,112 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Suspense,
+  lazy,
+  startTransition,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import Menu from "./components/Menu";
 import Cart from "./components/Cart";
-import Confirmation from "./components/Confirmation";
 import {
   appendOrderToSheet,
+  FALLBACK_MENU_DATA,
   fetchActiveMenuItems,
   fetchOrderStatusFromSheet,
   readCachedMenuItems,
-  FALLBACK_MENU_DATA,
 } from "./services/sheetsService";
 import { fetchReviewsByItemIds, saveReviewForItem } from "./services/reviewService";
 import { sendWhatsAppStatusNotification } from "./services/whatsappService";
+import { SITE_CONTENT, createWhatsAppOrderLink } from "./config/site";
+import { generateDemoReviews, getRatingsFromReviews } from "./utils/reviews";
 import "./App.css";
-import amul from "./assets/brands/amul.png";
-import campa from "./assets/brands/campa.png";
-import coke from "./assets/brands/coke.png";
-import heinz from "./assets/brands/heinz.png";
-import hellman from "./assets/brands/hellman.png";
-import maggi from "./assets/brands/maggi.png";
-import mdh from "./assets/brands/mdh.png";
-import nestle from "./assets/brands/nestle.png";
-import veeba from "./assets/brands/veeba.png";
 
-const MENU_REFRESH_INTERVAL_MS = 300000; // 5 minutes instead of 30 seconds
-const STATUS_TICK_INTERVAL_MS = 1000;
-const DEFAULT_CATEGORY = "Popular";
-const ALL_CATEGORIES = "All";
-const PREPARING_START_MS = 20000;
-const READY_START_MS = 50000;
-const ORDERS_STORAGE_KEY_PREFIX = "anupama:orders:";
-const ORDER_COUNTER_KEY_PREFIX = "anupama:orderCounter:";
-const WHATSAPP_SENT_KEY_PREFIX = "anupama:whatsappSent:";
+const Confirmation = lazy(() => import("./components/Confirmation"));
 
-// Generate demo reviews for an item
-const generateDemoReviews = (itemName) => {
-  const reviewTemplates = [
-    { text: "Amazing taste! Fresh and delicious. Will definitely order again.", rating: 5 },
-    { text: "Good quality and fast service. Perfect for a quick snack.", rating: 4 },
-    { text: "Tasty but a bit spicy for my liking. Overall good experience.", rating: 4 },
-    { text: "Fresh ingredients and great packaging. Highly recommended!", rating: 5 },
-    { text: "Decent taste but could be better. Value for money though.", rating: 3 },
-    { text: "Love it! Always consistent quality and quick delivery.", rating: 5 },
-    { text: "Good portion size and reasonable price. Happy with the order.", rating: 4 },
-    { text: "Could be hotter when delivered, but taste is excellent.", rating: 4 },
-    { text: "Best in town! Authentic flavors and fresh preparation.", rating: 5 },
-    { text: "Satisfactory. Nothing extraordinary but meets expectations.", rating: 3 },
-    { text: "Perfect for office lunch. Quick and tasty!", rating: 4 },
-    { text: "Great value for money. Will try other items too.", rating: 4 },
-  ];
-
-  const numReviews = Math.floor(Math.random() * 4) + 3; // 3-6 reviews
-  const shuffled = [...reviewTemplates].sort(() => 0.5 - Math.random());
-  const selected = shuffled.slice(0, numReviews);
-
-  return selected.map((template, index) => ({
-    id: `${itemName.toLowerCase().replace(/\s+/g, '-')}-review-${index + 1}`,
-    name: ["Rahul S.", "Priya M.", "Amit K.", "Sneha P.", "Vikram R.", "Anjali T."][index % 6],
-    rating: template.rating,
-    comment: template.text,
-    date: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Random date within last 30 days
-    helpfulCount: Math.max(0, Math.floor(Math.random() * 35) + (template.rating >= 4 ? 8 : 2)),
-  }));
-};
-
-const getRatingsFromReviews = (items, reviewsByItem) => {
-  const ratings = {};
-
-  items.forEach((item) => {
-    const itemReviews = Array.isArray(reviewsByItem?.[item.id]) ? reviewsByItem[item.id] : [];
-    if (!itemReviews.length) {
-      ratings[item.id] = {
-        rating: 0,
-        reviewCount: 0,
-      };
-      return;
-    }
-
-    const totalRating = itemReviews.reduce((sum, review) => sum + Number(review.rating || 0), 0);
-    ratings[item.id] = {
-      rating: Math.round((totalRating / itemReviews.length) * 10) / 10,
-      reviewCount: itemReviews.length,
-    };
-  });
-
-  return ratings;
-};
-
-const STATUS_TEXT = {
+const MENU_REFRESH_INTERVAL_MS = 1000 * 60 * 5;
+const STATUS_REFRESH_INTERVAL_MS = 1000 * 12;
+const ORDER_STORAGE_PREFIX = "anupama:orders:";
+const ORDER_COUNTER_PREFIX = "anupama:orderCounter:";
+const WHATSAPP_SENT_PREFIX = "anupama:whatsappSent:";
+const STATUS_COPY = {
   pending_payment: "Awaiting payment",
   payment_verified: "Payment verified",
-  preparing: "Preparing order",
+  preparing: "Preparing",
   ready_for_pickup: "Ready for pickup",
   delivered: "Delivered",
   cancelled: "Cancelled",
 };
 
-const getTodayDateKey = () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+const ALL_CATEGORY = "All";
+
+const inferCategory = (item) => {
+  const direct = String(item.category || "").trim();
+  if (direct) {
+    return direct
+      .toLowerCase()
+      .split(" ")
+      .filter(Boolean)
+      .map((part) => part[0].toUpperCase() + part.slice(1))
+      .join(" ");
+  }
+
+  const name = String(item.name || "").toLowerCase();
+  if (/(tea|coffee|shake|coke|campa|drink)/.test(name)) {
+    return "Beverages";
+  }
+  if (/(dosa|idli|poha)/.test(name)) {
+    return "Breakfast";
+  }
+  if (/(rice|noodle|maggi)/.test(name)) {
+    return "Meals";
+  }
+  return "Snacks";
 };
 
-const getOrdersKey = (dateKey) => `${ORDERS_STORAGE_KEY_PREFIX}${dateKey}`;
-const getOrderCounterKey = (dateKey) => `${ORDER_COUNTER_KEY_PREFIX}${dateKey}`;
-const getWhatsAppSentKey = (orderDateKey, orderId, status) =>
-  `${WHATSAPP_SENT_KEY_PREFIX}${orderDateKey}:${orderId}:${status}`;
+const decorateMenuItem = (item, index, popularIds = new Set()) => {
+  const name = String(item.name || "").trim();
+  const normalizedName = name.toLowerCase();
+  const isPopular =
+    popularIds.has(String(item.id)) ||
+    /(special|cheese|grilled|vada pav|maggi|dosa)/.test(normalizedName);
 
-const FALLBACK_BRAND_LOGO = "/logo.png";
+  return {
+    ...item,
+    name:
+      name
+        .split(" ")
+        .filter(Boolean)
+        .map((part) => part[0].toUpperCase() + part.slice(1))
+        .join(" ") || "Menu Item",
+    category: inferCategory(item),
+    description:
+      item.description ||
+      (/(tea|coffee)/.test(normalizedName)
+        ? "Freshly poured and served hot."
+        : /(sandwich|vada pav|samosa)/.test(normalizedName)
+          ? "A fast, comforting favourite for any hunger break."
+          : "Prepared fresh and packed carefully for quick service."),
+    badge: isPopular ? (index < 4 ? "Best seller" : "Popular") : "",
+    isVeg: true,
+  };
+};
+
+const getTodayKey = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
+    now.getDate()
+  ).padStart(2, "0")}`;
+};
+
+const getOrderStorageKey = (dateKey) => `${ORDER_STORAGE_PREFIX}${dateKey}`;
+const getOrderCounterKey = (dateKey) => `${ORDER_COUNTER_PREFIX}${dateKey}`;
+const getWhatsAppSentKey = (orderDateKey, orderId, status) =>
+  `${WHATSAPP_SENT_PREFIX}${orderDateKey}:${orderId}:${status}`;
 
 const readOrdersForDate = (dateKey) => {
   try {
-    const raw = localStorage.getItem(getOrdersKey(dateKey));
+    const raw = localStorage.getItem(getOrderStorageKey(dateKey));
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -120,24 +114,43 @@ const readOrdersForDate = (dateKey) => {
   }
 };
 
-const findLocalOrderById = (targetOrderId) => {
+const writeOrdersForDate = (dateKey, records) => {
+  localStorage.setItem(getOrderStorageKey(dateKey), JSON.stringify(records));
+};
+
+const upsertOrderForDate = (dateKey, orderRecord) => {
+  const orders = readOrdersForDate(dateKey);
+  const nextOrders = orders.some((entry) => Number(entry.orderId) === Number(orderRecord.orderId))
+    ? orders.map((entry) =>
+        Number(entry.orderId) === Number(orderRecord.orderId) ? orderRecord : entry
+      )
+    : [orderRecord, ...orders];
+
+  writeOrdersForDate(dateKey, nextOrders);
+};
+
+const replaceOrderIdForDate = (dateKey, previousOrderId, nextOrder) => {
+  const orders = readOrdersForDate(dateKey).filter(
+    (entry) =>
+      Number(entry.orderId) !== Number(previousOrderId) &&
+      Number(entry.orderId) !== Number(nextOrder.orderId)
+  );
+  writeOrdersForDate(dateKey, [nextOrder, ...orders]);
+};
+
+const findLocalOrderById = (orderId) => {
   try {
     for (const key of Object.keys(localStorage)) {
-      if (!key.startsWith(ORDERS_STORAGE_KEY_PREFIX)) {
+      if (!key.startsWith(ORDER_STORAGE_PREFIX)) {
         continue;
       }
 
       const raw = localStorage.getItem(key);
-      if (!raw) {
-        continue;
-      }
+      const parsed = raw ? JSON.parse(raw) : [];
+      const match = Array.isArray(parsed)
+        ? parsed.find((entry) => Number(entry.orderId) === Number(orderId))
+        : null;
 
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) {
-        continue;
-      }
-
-      const match = parsed.find((record) => Number(record?.orderId) === Number(targetOrderId));
       if (match) {
         return match;
       }
@@ -149,438 +162,159 @@ const findLocalOrderById = (targetOrderId) => {
   return null;
 };
 
-const writeOrdersForDate = (dateKey, records) => {
-  localStorage.setItem(getOrdersKey(dateKey), JSON.stringify(records));
-};
-
-const generateFreshOrderId = (dateKey) => {
-  const localMax = readOrdersForDate(dateKey).reduce((maxId, record) => {
-    const id = Number(record?.orderId);
-    return Number.isInteger(id) && id > maxId ? id : maxId;
+const generateOrderId = (dateKey) => {
+  const currentMax = readOrdersForDate(dateKey).reduce((max, entry) => {
+    const parsed = Number(entry.orderId);
+    return Number.isInteger(parsed) && parsed > max ? parsed : max;
   }, 0);
 
-  try {
-    const counterKey = getOrderCounterKey(dateKey);
-    const stored = Number(localStorage.getItem(counterKey) || 0);
-    const next = Math.max(localMax, Number.isInteger(stored) ? stored : 0) + 1;
-    localStorage.setItem(counterKey, String(next));
-    return next;
-  } catch {
-    return localMax + 1;
-  }
+  const counterKey = getOrderCounterKey(dateKey);
+  const stored = Number(localStorage.getItem(counterKey) || 0);
+  const nextId = Math.max(currentMax, stored) + 1;
+  localStorage.setItem(counterKey, String(nextId));
+  return nextId;
 };
 
-const upsertOrderForDate = (dateKey, orderRecord) => {
-  const records = readOrdersForDate(dateKey);
-  const index = records.findIndex((record) => record.orderId === orderRecord.orderId);
-
-  if (index >= 0) {
-    records[index] = orderRecord;
-  } else {
-    records.push(orderRecord);
+const inferLocalOrderStatus = (order) => {
+  if (order.sheetStatus) {
+    return order.sheetStatus;
   }
-
-  writeOrdersForDate(dateKey, records);
-};
-
-const replaceOrderRecordForDate = (dateKey, previousOrderId, nextOrderRecord) => {
-  const records = readOrdersForDate(dateKey).filter(
-    (record) =>
-      Number(record?.orderId) !== Number(previousOrderId) &&
-      Number(record?.orderId) !== Number(nextOrderRecord?.orderId)
-  );
-
-  records.push(nextOrderRecord);
-  writeOrdersForDate(dateKey, records);
-};
-
-const deriveStatus = (orderRecord, nowMs) => {
-  if (orderRecord?.sheetStatus) {
-    return orderRecord.sheetStatus;
-  }
-
-  if (!orderRecord?.paidAt) {
+  if (!order.paidAt && order.paymentMode !== "cash_counter") {
     return "pending_payment";
   }
 
-  const elapsedMs = Math.max(0, nowMs - new Date(orderRecord.paidAt).getTime());
-
-  if (elapsedMs < PREPARING_START_MS) {
+  const elapsedMinutes = Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 60000);
+  if (elapsedMinutes < 3) {
     return "payment_verified";
   }
-
-  if (elapsedMs < READY_START_MS) {
+  if (elapsedMinutes < 12) {
     return "preparing";
   }
-
   return "ready_for_pickup";
 };
 
-const toCategoryLabel = (value, name) => {
-  const raw = String(value || "").trim();
-  if (raw) {
-    return raw
-      .toLowerCase()
-      .split(" ")
-      .filter(Boolean)
-      .map((part) => part[0].toUpperCase() + part.slice(1))
-      .join(" ");
-  }
-
-  const lowerName = String(name || "").toLowerCase();
-
-  if (/(tea|coffee|cold coffee|drink|juice|shake|lassi|coke|campa)/.test(lowerName)) {
-    return "Beverages";
-  }
-
-  if (/(sandwich|vada pav|samosa|roll|burger|cutlet|toast)/.test(lowerName)) {
-    return "Quick Bites";
-  }
-
-  if (/(idli|dosa|uttapam|poha|upma|paratha)/.test(lowerName)) {
-    return "South Indian";
-  }
-
-  if (/(noodle|manchurian|chowmein|rice|fried rice)/.test(lowerName)) {
-    return "Meals";
-  }
-
-  return DEFAULT_CATEGORY;
-};
-
-const normalizeItemName = (value) =>
-  String(value || "")
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
-
-const parseOrderItems = (value) => {
-  const rawText = String(value || "").trim();
-  if (!rawText) {
-    return [];
-  }
-
-  return rawText
-    .split(/\s*,\s*/)
-    .map((part) => {
-      const match = part.match(/^(.*?)(?:\s*x\s*(\d+))?$/i);
-      const name = normalizeItemName(match?.[1] || part);
-      const qty = Number(match?.[2] || 1);
-      return {
-        name,
-        qty: Number.isInteger(qty) && qty > 0 ? qty : 1,
-      };
-    })
-    .filter((entry) => entry.name);
-};
-
-const BrandStrip = () => {
-  const brands = [
-    { src: amul, label: "Amul" },
-    { src: campa, label: "Campa" },
-    { src: coke, label: "Coca-Cola" },
-    { src: heinz, label: "Heinz" },
-    { src: hellman, label: "Hellmann's" },
-    { src: maggi, label: "Maggi" },
-    { src: mdh, label: "MDH" },
-    { src: nestle, label: "Nestle" },
-    { src: veeba, label: "Veeba" },
-    { src: "/brands/kissan.png", label: "Kissan" },
-    { src: "/brands/knorr.png", label: "Knorr" },
-    { src: "/brands/everest.png", label: "Everest" },
-    { src: "/brands/mtr.png", label: "MTR" },
-    { src: "/brands/chings.png", label: "Ching's" },
-  ];
-
-  return (
-    <div className="brand-strip">
-      {brands.map((logo, index) => (
-        <img
-          key={index}
-          src={logo.src}
-          className="brand-strip-logo"
-          alt={`${logo.label} brand logo`}
-          loading="lazy"
-          onError={(event) => {
-            event.currentTarget.onerror = null;
-            event.currentTarget.src = FALLBACK_BRAND_LOGO;
-          }}
-        />
-      ))}
-    </div>
-  );
-};
-
-const BrandLogosSection = () => {
-  const leftBrands = [
-    { src: amul, label: "Amul" },
-    { src: campa, label: "Campa" },
-    { src: coke, label: "Coca-Cola" },
-    { src: heinz, label: "Heinz" },
-    { src: "/brands/knorr.png", label: "Knorr" },
-  ];
-
-  const rightBrands = [
-    { src: maggi, label: "Maggi" },
-    { src: mdh, label: "MDH" },
-    { src: nestle, label: "Nestle" },
-    { src: veeba, label: "Veeba" },
-    { src: "/brands/mtr.png", label: "MTR" },
-  ];
-
-  return (
-    <>
-      {/* Left side brand logos */}
-      <div className="brands-section">
-        {leftBrands.map((logo, index) => (
-          <div key={`left-${index}`} className="brand-logo-item">
-            <img
-              src={logo.src}
-              alt={`${logo.label} brand`}
-              loading="lazy"
-              onError={(event) => {
-                event.currentTarget.onerror = null;
-                event.currentTarget.src = FALLBACK_BRAND_LOGO;
-              }}
-            />
-          </div>
-        ))}
-      </div>
-
-      {/* Right side brand logos */}
-      <div className="brands-section-right">
-        {rightBrands.map((logo, index) => (
-          <div key={`right-${index}`} className="brand-logo-item">
-            <img
-              src={logo.src}
-              alt={`${logo.label} brand`}
-              loading="lazy"
-              onError={(event) => {
-                event.currentTarget.onerror = null;
-                event.currentTarget.src = FALLBACK_BRAND_LOGO;
-              }}
-            />
-          </div>
-        ))}
-      </div>
-    </>
-  );
-};
-
 function App() {
-  const [menuItems, setMenuItems] = useState([]);
-  const [isMenuLoading, setIsMenuLoading] = useState(true);
+  const [menuItems, setMenuItems] = useState(() => readCachedMenuItems());
+  const [isMenuLoading, setIsMenuLoading] = useState(() => readCachedMenuItems().length === 0);
   const [menuError, setMenuError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeCategory, setActiveCategory] = useState(ALL_CATEGORIES);
+  const deferredSearch = useDeferredValue(searchQuery);
+  const [activeCategory, setActiveCategory] = useState(ALL_CATEGORY);
   const [cartItems, setCartItems] = useState([]);
-  const [isSavingOrder, setIsSavingOrder] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
+  const [isSavingOrder, setIsSavingOrder] = useState(false);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
   const [orderDetails, setOrderDetails] = useState(null);
-  const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
-  const [isFloatingCartOpen, setIsFloatingCartOpen] = useState(false);
-  const [customer, setCustomer] = useState({
-    name: "",
-    email: "",
-    phone: "",
-  });
-  const [statusNowMs, setStatusNowMs] = useState(Date.now());
-  const [trackOrderIdInput, setTrackOrderIdInput] = useState("");
-  const [trackedOrder, setTrackedOrder] = useState(null);
-  const [trackingError, setTrackingError] = useState("");
-  const [ordersRefreshKey, setOrdersRefreshKey] = useState(0);
-  const [todayOrders, setTodayOrders] = useState([]);
+  const [customer, setCustomer] = useState({ name: "", email: "", phone: "" });
+  const [todayOrders, setTodayOrders] = useState(() => readOrdersForDate(getTodayKey()));
   const [reviews, setReviews] = useState({});
   const [itemRatings, setItemRatings] = useState({});
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [reviewingItem, setReviewingItem] = useState(null);
-  const [newReview, setNewReview] = useState({
-    name: "",
-    rating: 5,
-    comment: "",
-  });
+  const [newReview, setNewReview] = useState({ name: "", rating: 5, comment: "" });
+  const [trackOrderId, setTrackOrderId] = useState("");
+  const [trackedOrder, setTrackedOrder] = useState(null);
+  const [trackingError, setTrackingError] = useState("");
 
-  const totalPrice = useMemo(
-    () => cartItems.reduce((sum, item) => sum + item.price, 0),
-    [cartItems]
+  const popularItemIds = useMemo(() => {
+    const counts = new Map();
+
+    todayOrders.forEach((order) => {
+      String(order.items || "")
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .forEach((entry) => {
+          const name = entry.replace(/\s*x\d+$/i, "").trim().toLowerCase();
+          counts.set(name, (counts.get(name) || 0) + 1);
+        });
+    });
+
+    const byName = [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([name]) => name);
+
+    return new Set(
+      menuItems
+        .filter((item) => byName.includes(String(item.name || "").trim().toLowerCase()))
+        .map((item) => String(item.id))
+    );
+  }, [menuItems, todayOrders]);
+
+  const decoratedMenu = useMemo(
+    () => menuItems.map((item, index) => decorateMenuItem(item, index, popularItemIds)),
+    [menuItems, popularItemIds]
   );
-
-  const menuItemsWithCategory = useMemo(
-    () =>
-      menuItems.map((item) => ({
-        ...item,
-        category: toCategoryLabel(item.category, item.name),
-      })),
-    [menuItems]
-  );
-
-  const menuStats = useMemo(() => {
-    const total = menuItems.length;
-    const available = menuItems.filter(item => item.active).length;
-    const unavailable = total - available;
-    return { total, available, unavailable };
-  }, [menuItems]);
 
   const categories = useMemo(() => {
-    const values = menuItemsWithCategory.map((item) => item.category);
-    return [ALL_CATEGORIES, ...Array.from(new Set(values))];
-  }, [menuItemsWithCategory]);
+    const values = new Set(decoratedMenu.map((item) => item.category));
+    return [ALL_CATEGORY, ...values];
+  }, [decoratedMenu]);
 
-  const filteredMenuItems = useMemo(() => {
-    const normalizedSearch = searchQuery.trim().toLowerCase();
+  const filteredMenu = useMemo(() => {
+    const query = deferredSearch.trim().toLowerCase();
 
-    return menuItemsWithCategory.filter((item) => {
-      const categoryMatch =
-        activeCategory === ALL_CATEGORIES || item.category === activeCategory;
-      const searchMatch =
-        !normalizedSearch ||
-        item.name.toLowerCase().includes(normalizedSearch) ||
-        item.category.toLowerCase().includes(normalizedSearch);
+    return decoratedMenu.filter((item) => {
+      const matchesCategory = activeCategory === ALL_CATEGORY || item.category === activeCategory;
+      const matchesQuery =
+        !query ||
+        item.name.toLowerCase().includes(query) ||
+        item.category.toLowerCase().includes(query) ||
+        item.description.toLowerCase().includes(query);
 
-      return categoryMatch && searchMatch;
+      return matchesCategory && matchesQuery;
     });
-  }, [menuItemsWithCategory, activeCategory, searchQuery]);
+  }, [activeCategory, decoratedMenu, deferredSearch]);
 
-  const quickPickIds = useMemo(() => {
-    const picks = [...menuItemsWithCategory]
-      .sort((a, b) => Number(a.price) - Number(b.price))
-      .slice(0, 3)
-      .map((item) => String(item.id));
-    return new Set(picks);
-  }, [menuItemsWithCategory]);
+  const featuredItemIds = useMemo(
+    () =>
+      decoratedMenu
+        .slice()
+        .sort((left, right) => Number(left.price) - Number(right.price))
+        .slice(0, 3)
+        .map((item) => String(item.id)),
+    [decoratedMenu]
+  );
 
-  const estimatedPrepMinutes = useMemo(() => {
-    if (!cartItems.length) {
-      return 10;
-    }
-    return Math.min(25, 8 + cartItems.length * 2);
-  }, [cartItems.length]);
-
-  const cartUnitCount = useMemo(
-    () => cartItems.reduce((sum, item) => sum + (item.quantity || 1), 0),
+  const totalPrice = useMemo(
+    () =>
+      cartItems.reduce(
+        (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0),
+        0
+      ),
     [cartItems]
   );
 
-  const averageMenuRating = useMemo(() => {
-    const values = Object.values(itemRatings);
+  const totalUnits = useMemo(
+    () => cartItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
+    [cartItems]
+  );
+
+  const estimatedPrepMinutes = useMemo(
+    () => Math.min(30, Math.max(12, 8 + totalUnits * 2)),
+    [totalUnits]
+  );
+
+  const averageRating = useMemo(() => {
+    const values = Object.values(itemRatings).filter((entry) => Number(entry.reviewCount) > 0);
     if (!values.length) {
       return "4.8";
     }
 
-    const totalRating = values.reduce((sum, entry) => sum + Number(entry?.rating || 0), 0);
-    return (totalRating / values.length).toFixed(1);
+    const total = values.reduce((sum, entry) => sum + Number(entry.rating || 0), 0);
+    return (total / values.length).toFixed(1);
   }, [itemRatings]);
 
   const totalReviewCount = useMemo(
     () =>
       Object.values(itemRatings).reduce(
-        (sum, entry) => sum + Number(entry?.reviewCount || 0),
+        (sum, entry) => sum + Number(entry.reviewCount || 0),
         0
       ),
     [itemRatings]
   );
-
-  useEffect(() => {
-    setTodayOrders(readOrdersForDate(getTodayDateKey()));
-  }, [ordersRefreshKey]);
-
-  const mostOrderedToday = useMemo(() => {
-    const menuByName = new Map(
-      menuItemsWithCategory.map((item) => [normalizeItemName(item.name), item])
-    );
-    const itemCounts = new Map();
-
-    todayOrders.forEach((order) => {
-      parseOrderItems(order?.items).forEach((entry) => {
-        const menuItem = menuByName.get(entry.name);
-        if (!menuItem) {
-          return;
-        }
-        const current = itemCounts.get(menuItem.id) || {
-          item: menuItem,
-          count: 0,
-        };
-        current.count += entry.qty;
-        itemCounts.set(menuItem.id, current);
-      });
-    });
-
-    return [...itemCounts.values()]
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 4);
-  }, [todayOrders, menuItemsWithCategory]);
-
-  const frequentlyBoughtTogether = useMemo(() => {
-    const menuByName = new Map(
-      menuItemsWithCategory.map((item) => [normalizeItemName(item.name), item])
-    );
-    const pairCounts = new Map();
-
-    todayOrders.forEach((order) => {
-      const uniqueIds = new Set();
-      parseOrderItems(order?.items).forEach((entry) => {
-        const menuItem = menuByName.get(entry.name);
-        if (menuItem?.id !== undefined && menuItem?.id !== null) {
-          uniqueIds.add(String(menuItem.id));
-        }
-      });
-
-      const ids = [...uniqueIds];
-      for (let i = 0; i < ids.length; i += 1) {
-        for (let j = i + 1; j < ids.length; j += 1) {
-          const [a, b] = [ids[i], ids[j]].sort();
-          const key = `${a}::${b}`;
-          pairCounts.set(key, (pairCounts.get(key) || 0) + 1);
-        }
-      }
-    });
-
-    const byId = new Map(menuItemsWithCategory.map((item) => [String(item.id), item]));
-    const rankedPairs = [...pairCounts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([key, count]) => {
-        const [leftId, rightId] = key.split("::");
-        const left = byId.get(leftId);
-        const right = byId.get(rightId);
-        if (!left || !right) {
-          return null;
-        }
-        return {
-          id: key,
-          left,
-          right,
-          count,
-          totalPrice: Number(left.price) + Number(right.price),
-        };
-      })
-      .filter(Boolean);
-
-    if (rankedPairs.length) {
-      return rankedPairs.slice(0, 3);
-    }
-
-    const fallback = [...menuItemsWithCategory]
-      .sort((a, b) => Number(a.price) - Number(b.price))
-      .slice(0, 4);
-
-    if (fallback.length < 2) {
-      return [];
-    }
-
-    const fallbackPairs = [];
-    for (let i = 0; i < fallback.length - 1 && fallbackPairs.length < 2; i += 1) {
-      const left = fallback[i];
-      const right = fallback[i + 1];
-      fallbackPairs.push({
-        id: `${left.id}::${right.id}`,
-        left,
-        right,
-        count: 0,
-        totalPrice: Number(left.price) + Number(right.price),
-      });
-    }
-    return fallbackPairs;
-  }, [todayOrders, menuItemsWithCategory]);
 
   const currentOrder = useMemo(() => {
     if (!orderDetails) {
@@ -589,455 +323,294 @@ function App() {
 
     return {
       ...orderDetails,
-      status: deriveStatus(orderDetails, statusNowMs),
+      status: inferLocalOrderStatus(orderDetails),
     };
-  }, [orderDetails, statusNowMs]);
+  }, [orderDetails]);
 
-  const liveTrackedOrder = useMemo(() => {
-    if (!trackedOrder) {
-      return null;
-    }
-
-    return {
-      ...trackedOrder,
-      status: deriveStatus(trackedOrder, statusNowMs),
-    };
-  }, [trackedOrder, statusNowMs]);
-
-  const loadMenu = useCallback(async (options = {}) => {
-    const { silent = false, force = false } = options;
-
-    // Always try to show cached data immediately for better UX
-    const cachedItems = readCachedMenuItems();
-    if (cachedItems.length > 0 && !force) {
-      setMenuItems(cachedItems);
-      setIsMenuLoading(false);
-
-      // Load reviews for cached items
-      const itemIds = cachedItems.map((item) => item.id);
-      try {
-        const reviewsData = await fetchReviewsByItemIds(itemIds);
-        const ratings = getRatingsFromReviews(cachedItems, reviewsData);
-        setReviews(reviewsData);
-        setItemRatings(ratings);
-      } catch {
-        // Use demo reviews if API fails
-        const demoReviews = {};
-        cachedItems.forEach((item) => {
-          demoReviews[item.id] = generateDemoReviews(item.name);
-        });
-        const ratings = getRatingsFromReviews(cachedItems, demoReviews);
-        setReviews(demoReviews);
-        setItemRatings(ratings);
-      }
-    } else if (!force) {
-      // Show fallback menu immediately if no cached data
-      setMenuItems(FALLBACK_MENU_DATA);
-      setIsMenuLoading(false);
-
-      // Load demo reviews for fallback items
-      const demoReviews = {};
-      FALLBACK_MENU_DATA.forEach((item) => {
-        demoReviews[item.id] = generateDemoReviews(item.name);
-      });
-      const ratings = getRatingsFromReviews(FALLBACK_MENU_DATA, demoReviews);
-      setReviews(demoReviews);
-      setItemRatings(ratings);
-    }
-
-    if (!silent && cachedItems.length === 0 && !force) {
-      setIsMenuLoading(true);
-      setMenuError("");
-    }
-
-    try {
-      const items = await fetchActiveMenuItems();
-      const hasNewData = items.length !== cachedItems.length ||
-        JSON.stringify(items) !== JSON.stringify(cachedItems);
-
-      if (hasNewData || force) {
-        setMenuItems(items);
-
-        const itemIds = items.map((item) => item.id);
-        let reviewsData = {};
-        try {
-          reviewsData = await fetchReviewsByItemIds(itemIds);
-        } catch {
-          // Fallback keeps UI usable when reviews backend is not yet configured.
-          reviewsData = {};
-          items.forEach((item) => {
-            reviewsData[item.id] = generateDemoReviews(item.name);
-          });
-        }
-
-        const ratings = getRatingsFromReviews(items, reviewsData);
-        setReviews(reviewsData);
-        setItemRatings(ratings);
-      }
-    } catch (error) {
-      if (!silent && cachedItems.length === 0) {
-        setMenuError(
-          error?.message || "Unable to load menu right now. Please try again."
-        );
-      }
-    } finally {
-      if (!silent) {
-        setIsMenuLoading(false);
-      }
-    }
+  useEffect(() => {
+    document.title = SITE_CONTENT.seoTitle;
   }, []);
 
   useEffect(() => {
-    loadMenu();
-
-    const intervalId = setInterval(() => {
-      loadMenu({ silent: true });
-    }, MENU_REFRESH_INTERVAL_MS);
-
+    const syncOrders = () => setTodayOrders(readOrdersForDate(getTodayKey()));
+    syncOrders();
+    const intervalId = setInterval(syncOrders, 30000);
     return () => clearInterval(intervalId);
-  }, [loadMenu]);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadReviews = async (items) => {
+      const itemIds = items.map((item) => item.id);
+      if (!itemIds.length) {
+        return;
+      }
+
+      try {
+        const nextReviews = await fetchReviewsByItemIds(itemIds);
+        if (!active) {
+          return;
+        }
+        setReviews(nextReviews);
+        setItemRatings(getRatingsFromReviews(items, nextReviews));
+      } catch {
+        const fallbackReviews = {};
+        items.forEach((item) => {
+          fallbackReviews[item.id] = generateDemoReviews(item.name);
+        });
+        if (!active) {
+          return;
+        }
+        setReviews(fallbackReviews);
+        setItemRatings(getRatingsFromReviews(items, fallbackReviews));
+      }
+    };
+
+    const loadMenu = async (silent = false) => {
+      const cached = readCachedMenuItems();
+      if (!silent && !cached.length) {
+        setIsMenuLoading(true);
+      }
+
+      if (cached.length && !silent) {
+        startTransition(() => {
+          setMenuItems(cached);
+          setIsMenuLoading(false);
+        });
+      }
+
+      try {
+        const items = await fetchActiveMenuItems();
+        if (!active) {
+          return;
+        }
+
+        startTransition(() => {
+          setMenuItems(items);
+          setMenuError("");
+          setIsMenuLoading(false);
+        });
+
+        await loadReviews(items);
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+
+        const fallback = cached.length ? cached : FALLBACK_MENU_DATA;
+        startTransition(() => {
+          setMenuItems(fallback);
+          setMenuError(
+            cached.length
+              ? ""
+              : error?.message || "Menu is temporarily unavailable. Showing our fallback menu."
+          );
+          setIsMenuLoading(false);
+        });
+        await loadReviews(fallback);
+      }
+    };
+
+    loadMenu(false);
+    const refreshId = setInterval(() => loadMenu(true), MENU_REFRESH_INTERVAL_MS);
+
+    return () => {
+      active = false;
+      clearInterval(refreshId);
+    };
+  }, []);
 
   useEffect(() => {
     if (!categories.includes(activeCategory)) {
-      setActiveCategory(ALL_CATEGORIES);
+      setActiveCategory(ALL_CATEGORY);
     }
-  }, [categories, activeCategory]);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setStatusNowMs(Date.now());
-    }, STATUS_TICK_INTERVAL_MS);
-
-    return () => clearInterval(timer);
-  }, []);
-
-  const notifyWhatsAppForStatus = useCallback(async (orderRecord, status) => {
-    if (!orderRecord?.customer?.phone || !orderRecord?.orderDateKey || !orderRecord?.orderId) {
-      return;
-    }
-
-    const sentKey = getWhatsAppSentKey(
-      orderRecord.orderDateKey,
-      orderRecord.orderId,
-      status
-    );
-    if (localStorage.getItem(sentKey) === "1") {
-      return;
-    }
-
-    try {
-      await sendWhatsAppStatusNotification({
-        customerPhone: orderRecord.customer.phone,
-        customerName: orderRecord.customer.name,
-        orderId: orderRecord.orderId,
-        orderDateKey: orderRecord.orderDateKey,
-        total: orderRecord.total,
-        status,
-      });
-      localStorage.setItem(sentKey, "1");
-    } catch (error) {
-      // keep checkout/status flow working even if WhatsApp service is temporarily down
-      console.error("WhatsApp notification failed", error);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (
-      !orderDetails?.orderId ||
-      !orderDetails?.orderDateKey ||
-      (!orderDetails?.paidAt && orderDetails?.paymentMode !== "cash_counter")
-    ) {
-      return undefined;
-    }
-
-    let active = true;
-
-    const pullStatus = async () => {
-      try {
-        const remoteOrder = await fetchOrderStatusFromSheet({
-          orderDateKey: orderDetails.orderDateKey,
-          orderId: orderDetails.orderId,
-        });
-
-        if (
-          !active ||
-          !remoteOrder ||
-          Number(remoteOrder.orderId) !== Number(orderDetails.orderId)
-        ) {
-          return;
-        }
-
-        setOrderDetails((prev) => {
-          if (!prev || prev.orderId !== orderDetails.orderId) {
-            return prev;
-          }
-
-          const merged = {
-            ...prev,
-            ...remoteOrder,
-            saving: false,
-            error: null,
-          };
-
-          upsertOrderForDate(prev.orderDateKey, merged);
-          setOrdersRefreshKey((key) => key + 1);
-          return merged;
-        });
-      } catch {
-        // fallback to local timer status if sheet polling fails
-      }
-    };
-
-    pullStatus();
-    const intervalId = setInterval(pullStatus, 10000);
-
-    return () => {
-      active = false;
-      clearInterval(intervalId);
-    };
-  }, [
-    orderDetails?.orderId,
-    orderDetails?.orderDateKey,
-    orderDetails?.paidAt,
-    orderDetails?.paymentMode,
-  ]);
-
-  useEffect(() => {
-    if (!trackedOrder?.orderId || !trackedOrder?.orderDateKey) {
-      return undefined;
-    }
-
-    let active = true;
-
-    const pullStatus = async () => {
-      try {
-        const remoteOrder = await fetchOrderStatusFromSheet({
-          orderDateKey: trackedOrder.orderDateKey,
-          orderId: trackedOrder.orderId,
-        });
-
-        if (
-          !active ||
-          !remoteOrder ||
-          Number(remoteOrder.orderId) !== Number(trackedOrder.orderId)
-        ) {
-          return;
-        }
-
-        setTrackedOrder((prev) =>
-          prev && prev.orderId === trackedOrder.orderId
-            ? {
-                ...prev,
-                ...remoteOrder,
-              }
-            : prev
-        );
-      } catch {
-        // keep showing current data
-      }
-    };
-
-    pullStatus();
-    const intervalId = setInterval(pullStatus, 10000);
-
-    return () => {
-      active = false;
-      clearInterval(intervalId);
-    };
-  }, [trackedOrder?.orderId, trackedOrder?.orderDateKey]);
+  }, [activeCategory, categories]);
 
   useEffect(() => {
     if (!currentOrder?.orderId || !currentOrder?.orderDateKey) {
-      return;
+      return undefined;
     }
 
-    if (["preparing", "ready_for_pickup", "delivered"].includes(currentOrder.status)) {
-      notifyWhatsAppForStatus(currentOrder, currentOrder.status);
-    }
-  }, [
-    currentOrder,
-    currentOrder?.orderId,
-    currentOrder?.orderDateKey,
-    currentOrder?.status,
-    currentOrder?.customer?.phone,
-    notifyWhatsAppForStatus,
-  ]);
+    const syncStatus = async () => {
+      try {
+        const remoteOrder = await fetchOrderStatusFromSheet({
+          orderDateKey: currentOrder.orderDateKey,
+          orderId: currentOrder.orderId,
+        });
 
-  const addToCart = (item) => {
-    setCartItems((prev) => [...prev, item]);
-  };
+        if (!remoteOrder) {
+          return;
+        }
 
-  const addBundleToCart = (bundle) => {
-    if (!bundle?.left || !bundle?.right) {
-      return;
-    }
+        setOrderDetails((previous) => {
+          if (!previous || Number(previous.orderId) !== Number(currentOrder.orderId)) {
+            return previous;
+          }
 
-    const leftPrice = Number(bundle.left.price);
-    const rightPrice = Number(bundle.right.price);
-
-    setCartItems((prev) => [
-      ...prev,
-      {
-        ...bundle.left,
-        quantity: 1,
-        unitPrice: leftPrice,
-        price: leftPrice,
-      },
-      {
-        ...bundle.right,
-        quantity: 1,
-        unitPrice: rightPrice,
-        price: rightPrice,
-      },
-    ]);
-  };
-
-  const removeFromCart = (indexToRemove) => {
-    setCartItems((prev) => prev.filter((_, index) => index !== indexToRemove));
-  };
-
-  const openCheckoutModal = () => {
-    if (!cartItems.length || isSavingOrder) {
-      return;
-    }
-
-    setCheckoutError("");
-    setIsFloatingCartOpen(false);
-    setIsCheckoutModalOpen(true);
-  };
-
-  const closeCheckoutModal = () => {
-    if (isSavingOrder) {
-      return;
-    }
-
-    setIsCheckoutModalOpen(false);
-  };
-
-  const toggleFloatingCart = () => {
-    setIsFloatingCartOpen((prev) => !prev);
-  };
-
-  const openReviewModal = (item) => {
-    setReviewingItem(item);
-    setNewReview({
-      name: "",
-      rating: 5,
-      comment: "",
-    });
-    setIsReviewModalOpen(true);
-  };
-
-  const closeReviewModal = () => {
-    setIsReviewModalOpen(false);
-    setReviewingItem(null);
-  };
-
-  const submitReview = () => {
-    if (!reviewingItem || !newReview.comment.trim()) {
-      return;
-    }
-
-    const reviewData = {
-      id: `user-review-${Date.now()}`,
-      name: newReview.name.trim() || "Anonymous",
-      rating: newReview.rating,
-      comment: newReview.comment.trim(),
-      date: new Date().toISOString().split('T')[0],
-      helpfulCount: 0,
+          const merged = {
+            ...previous,
+            ...remoteOrder,
+          };
+          upsertOrderForDate(previous.orderDateKey, merged);
+          return merged;
+        });
+      } catch {
+        // Keep local status fallback alive even when the sheet endpoint is delayed.
+      }
     };
 
-    setReviews((prev) => ({
-      ...prev,
-      [reviewingItem.id]: [reviewData, ...(prev[reviewingItem.id] || [])],
-    }));
+    syncStatus();
+    const intervalId = setInterval(syncStatus, STATUS_REFRESH_INTERVAL_MS);
+    return () => clearInterval(intervalId);
+  }, [currentOrder?.orderDateKey, currentOrder?.orderId]);
 
-    const currentReviews = [...(reviews[reviewingItem.id] || []), reviewData];
-    const avgRating = currentReviews.reduce((sum, r) => sum + r.rating, 0) / currentReviews.length;
-    setItemRatings((prev) => ({
-      ...prev,
-      [reviewingItem.id]: {
-        rating: Math.round(avgRating * 10) / 10,
-        reviewCount: currentReviews.length,
-      },
-    }));
+  useEffect(() => {
+    if (!currentOrder?.customer?.phone || !currentOrder?.orderDateKey || !currentOrder?.orderId) {
+      return;
+    }
 
-    closeReviewModal();
+    const notify = async () => {
+      const sentKey = getWhatsAppSentKey(
+        currentOrder.orderDateKey,
+        currentOrder.orderId,
+        currentOrder.status
+      );
 
-    saveReviewForItem({
-      itemId: reviewingItem.id,
-      review: reviewData,
-    }).catch((error) => {
-      console.error("Review sync failed:", error?.message || error);
+      if (localStorage.getItem(sentKey) === "1") {
+        return;
+      }
+
+      try {
+        await sendWhatsAppStatusNotification({
+          customerPhone: currentOrder.customer.phone,
+          customerName: currentOrder.customer.name,
+          orderId: currentOrder.orderId,
+          orderDateKey: currentOrder.orderDateKey,
+          total: currentOrder.total,
+          status: currentOrder.status,
+        });
+        localStorage.setItem(sentKey, "1");
+      } catch {
+        // Support fallback buttons cover this path.
+      }
+    };
+
+    if (["payment_verified", "preparing", "ready_for_pickup", "delivered"].includes(currentOrder.status)) {
+      notify();
+    }
+  }, [currentOrder]);
+
+  const addToCart = (item, quantity = 1) => {
+    setCartItems((previous) => {
+      const existing = previous.find((entry) => String(entry.id) === String(item.id));
+      if (existing) {
+        return previous.map((entry) =>
+          String(entry.id) === String(item.id)
+            ? { ...entry, quantity: Math.min(10, entry.quantity + quantity) }
+            : entry
+        );
+      }
+
+      return [
+        ...previous,
+        {
+          id: item.id,
+          name: item.name,
+          price: Number(item.price),
+          image: item.image,
+          badge: item.badge,
+          quantity,
+        },
+      ];
     });
   };
 
-  const onReviewFieldChange = (field, value) => {
-    setNewReview((prev) => ({ ...prev, [field]: value }));
+  const decreaseCartItem = (itemId) => {
+    setCartItems((previous) =>
+      previous
+        .map((item) =>
+          String(item.id) === String(itemId)
+            ? { ...item, quantity: Math.max(0, item.quantity - 1) }
+            : item
+        )
+        .filter((item) => item.quantity > 0)
+    );
   };
 
-  const onCustomerFieldChange = (event) => {
-    const { name, value } = event.target;
-    setCustomer((prev) => ({ ...prev, [name]: value }));
+  const increaseCartItem = (itemId) => {
+    setCartItems((previous) =>
+      previous.map((item) =>
+        String(item.id) === String(itemId)
+          ? { ...item, quantity: Math.min(10, item.quantity + 1) }
+          : item
+      )
+    );
   };
 
-  const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-  const isValidPhone = (value) => /^[0-9]{10}$/.test(value);
+  const removeCartItem = (itemId) => {
+    setCartItems((previous) => previous.filter((item) => String(item.id) !== String(itemId)));
+  };
 
-  const checkout = (event) => {
-    event.preventDefault();
-
+  const openCheckout = () => {
     if (!cartItems.length || isSavingOrder) {
       return;
     }
-
-    if (!customer.name.trim()) {
-      setCheckoutError("Please enter your name.");
-      return;
-    }
-
-    const emailTrim = customer.email.trim();
-    if (emailTrim && !isValidEmail(emailTrim)) {
-      setCheckoutError("Please enter a valid email address.");
-      return;
-    }
-
-    if (!isValidPhone(customer.phone.trim())) {
-      setCheckoutError("Please enter a 10-digit phone number.");
-      return;
-    }
-
-    setIsSavingOrder(false);
     setCheckoutError("");
+    setIsMobileCartOpen(false);
+    setIsCheckoutOpen(true);
+  };
 
-    const todayKey = getTodayDateKey();
-    const orderId = generateFreshOrderId(todayKey);
+  const placeOrder = (event) => {
+    event.preventDefault();
+
+    const phone = customer.phone.trim();
+    const email = customer.email.trim();
+    const name = customer.name.trim();
+
+    if (name.length < 2) {
+      setCheckoutError("Please enter your full name.");
+      return;
+    }
+    if (!/^[6-9]\d{9}$/.test(phone)) {
+      setCheckoutError("Please enter a valid 10-digit mobile number.");
+      return;
+    }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setCheckoutError("Please enter a valid email address or leave it blank.");
+      return;
+    }
+
+    const dateKey = getTodayKey();
+    const orderId = generateOrderId(dateKey);
     const createdAt = new Date().toISOString();
-    const items = cartItems.map((item) => `${item.name} x${item.quantity || 1}`).join(", ");
+    const items = cartItems
+      .map((item) => `${item.name} x${Number(item.quantity)}`)
+      .join(", ");
 
-    const newOrder = {
+    const nextOrder = {
       orderId,
-      orderDateKey: todayKey,
+      orderDateKey: dateKey,
       createdAt,
       paidAt: null,
       paymentMode: "upi",
       total: totalPrice,
-      customer: {
-        name: customer.name.trim(),
-        email: customer.email.trim(),
-        phone: customer.phone.trim(),
-      },
       items,
-      saving: false,
+      customer: {
+        name,
+        email,
+        phone,
+      },
       error: null,
+      saving: false,
     };
 
-    upsertOrderForDate(todayKey, newOrder);
-    setOrdersRefreshKey((key) => key + 1);
-    setOrderDetails(newOrder);
-    notifyWhatsAppForStatus(newOrder, "order_placed");
+    upsertOrderForDate(dateKey, nextOrder);
+    setTodayOrders(readOrdersForDate(dateKey));
+    setOrderDetails(nextOrder);
     setCartItems([]);
-    setIsCheckoutModalOpen(false);
+    setIsCheckoutOpen(false);
+    setCheckoutError("");
   };
 
   const confirmPayment = async () => {
@@ -1045,54 +618,52 @@ function App() {
       return;
     }
 
-    setOrderDetails((prev) => ({ ...prev, saving: true, error: null }));
+    setOrderDetails((previous) => ({ ...previous, saving: true, error: null }));
+    setIsSavingOrder(true);
 
-    const nowIso = new Date().toISOString();
-    const updatedOrder = {
-      ...orderDetails,
-      paidAt: nowIso,
-      paymentMode: "upi",
-      saving: false,
-      error: null,
-    };
+    const paidAt = new Date().toISOString();
 
     try {
-      const appendResult = await appendOrderToSheet({
-        orderId: updatedOrder.orderId,
-        orderDateKey: updatedOrder.orderDateKey,
-        customerName: updatedOrder.customer.name,
-        customerEmail: updatedOrder.customer.email,
-        customerPhone: updatedOrder.customer.phone,
-        items: updatedOrder.items,
-        total: updatedOrder.total,
-        timestamp: nowIso,
+      const result = await appendOrderToSheet({
+        orderId: orderDetails.orderId,
+        orderDateKey: orderDetails.orderDateKey,
+        customerName: orderDetails.customer.name,
+        customerEmail: orderDetails.customer.email,
+        customerPhone: orderDetails.customer.phone,
+        items: orderDetails.items,
+        total: orderDetails.total,
+        timestamp: paidAt,
         status: "payment_verified",
       });
-      const canonicalOrderId = Number(appendResult?.orderId);
-      const mergedOrder =
-        Number.isInteger(canonicalOrderId) && canonicalOrderId > 0
-          ? { ...updatedOrder, orderId: canonicalOrderId }
-          : updatedOrder;
 
-      if (mergedOrder.orderId !== updatedOrder.orderId) {
-        replaceOrderRecordForDate(
-          mergedOrder.orderDateKey,
-          updatedOrder.orderId,
-          mergedOrder
-        );
+      const canonicalOrderId = Number(result.orderId || orderDetails.orderId);
+      const nextOrder = {
+        ...orderDetails,
+        orderId: canonicalOrderId,
+        paidAt,
+        paymentMode: "upi",
+        saving: false,
+        error: null,
+      };
+
+      if (canonicalOrderId !== Number(orderDetails.orderId)) {
+        replaceOrderIdForDate(orderDetails.orderDateKey, orderDetails.orderId, nextOrder);
       } else {
-        upsertOrderForDate(mergedOrder.orderDateKey, mergedOrder);
+        upsertOrderForDate(orderDetails.orderDateKey, nextOrder);
       }
-      setOrdersRefreshKey((key) => key + 1);
-      setOrderDetails(mergedOrder);
+
+      setOrderDetails(nextOrder);
+      setTodayOrders(readOrdersForDate(orderDetails.orderDateKey));
     } catch (error) {
-      setOrderDetails((prev) => ({
-        ...prev,
+      setOrderDetails((previous) => ({
+        ...previous,
         saving: false,
         error:
           error?.message ||
-          "Unable to confirm payment. Check your connection and try again.",
+          "We could not verify payment right now. Use WhatsApp or call for instant support.",
       }));
+    } finally {
+      setIsSavingOrder(false);
     }
   };
 
@@ -1101,431 +672,480 @@ function App() {
       return;
     }
 
-    setOrderDetails((prev) => ({ ...prev, saving: true, error: null }));
-
-    const nowIso = new Date().toISOString();
-    const updatedOrder = {
-      ...orderDetails,
-      paymentMode: "cash_counter",
-      saving: false,
-      error: null,
-    };
+    setOrderDetails((previous) => ({ ...previous, saving: true, error: null }));
+    setIsSavingOrder(true);
 
     try {
-      const appendResult = await appendOrderToSheet({
-        orderId: updatedOrder.orderId,
-        orderDateKey: updatedOrder.orderDateKey,
-        customerName: updatedOrder.customer.name,
-        customerEmail: updatedOrder.customer.email,
-        customerPhone: updatedOrder.customer.phone,
-        items: updatedOrder.items,
-        total: updatedOrder.total,
-        timestamp: nowIso,
+      const result = await appendOrderToSheet({
+        orderId: orderDetails.orderId,
+        orderDateKey: orderDetails.orderDateKey,
+        customerName: orderDetails.customer.name,
+        customerEmail: orderDetails.customer.email,
+        customerPhone: orderDetails.customer.phone,
+        items: orderDetails.items,
+        total: orderDetails.total,
+        timestamp: new Date().toISOString(),
         status: "pending_payment",
       });
-      const canonicalOrderId = Number(appendResult?.orderId);
-      const mergedOrder =
-        Number.isInteger(canonicalOrderId) && canonicalOrderId > 0
-          ? { ...updatedOrder, orderId: canonicalOrderId }
-          : updatedOrder;
 
-      if (mergedOrder.orderId !== updatedOrder.orderId) {
-        replaceOrderRecordForDate(
-          mergedOrder.orderDateKey,
-          updatedOrder.orderId,
-          mergedOrder
-        );
+      const canonicalOrderId = Number(result.orderId || orderDetails.orderId);
+      const nextOrder = {
+        ...orderDetails,
+        orderId: canonicalOrderId,
+        paymentMode: "cash_counter",
+        saving: false,
+        error: null,
+      };
+
+      if (canonicalOrderId !== Number(orderDetails.orderId)) {
+        replaceOrderIdForDate(orderDetails.orderDateKey, orderDetails.orderId, nextOrder);
       } else {
-        upsertOrderForDate(mergedOrder.orderDateKey, mergedOrder);
+        upsertOrderForDate(orderDetails.orderDateKey, nextOrder);
       }
-      setOrdersRefreshKey((key) => key + 1);
-      setOrderDetails(mergedOrder);
+
+      setOrderDetails(nextOrder);
+      setTodayOrders(readOrdersForDate(orderDetails.orderDateKey));
     } catch (error) {
-      setOrderDetails((prev) => ({
-        ...prev,
+      setOrderDetails((previous) => ({
+        ...previous,
         saving: false,
         error:
           error?.message ||
-          "Unable to register cash-at-counter option. Check your connection and try again.",
+          "Cash-at-counter registration failed. Please contact the canteen directly.",
       }));
+    } finally {
+      setIsSavingOrder(false);
     }
   };
 
-  const trackOrderById = async () => {
-    setTrackingError("");
-
-    const trimmed = trackOrderIdInput.trim();
-    const parsedId = Number(trimmed);
-    if (!trimmed || !Number.isInteger(parsedId) || parsedId <= 0) {
-      setTrackedOrder(null);
-      setTrackingError("Enter a valid numeric order ID.");
+  const submitReview = async (event) => {
+    event.preventDefault();
+    if (!reviewingItem || !newReview.comment.trim()) {
       return;
     }
 
-    const todayKey = getTodayDateKey();
+    const review = {
+      id: `review-${Date.now()}`,
+      name: newReview.name.trim() || "Anonymous",
+      rating: Number(newReview.rating),
+      comment: newReview.comment.trim(),
+      date: new Date().toISOString().slice(0, 10),
+      helpfulCount: 0,
+    };
+
+    const nextReviews = {
+      ...reviews,
+      [reviewingItem.id]: [review, ...(reviews[reviewingItem.id] || [])],
+    };
+
+    setReviews(nextReviews);
+    setItemRatings(getRatingsFromReviews(decoratedMenu, nextReviews));
+    setIsReviewModalOpen(false);
+    setReviewingItem(null);
+    setNewReview({ name: "", rating: 5, comment: "" });
 
     try {
-      const remoteOrder = await fetchOrderStatusFromSheet({
-        orderId: parsedId,
-      });
+      await saveReviewForItem({ itemId: reviewingItem.id, review });
+    } catch {
+      // Local-first review entry keeps the experience smooth even if sync is delayed.
+    }
+  };
 
+  const trackOrder = async () => {
+    const parsedOrderId = Number(trackOrder.trim());
+    if (!Number.isInteger(parsedOrderId) || parsedOrderId <= 0) {
+      setTrackingError("Enter a valid order ID.");
+      setTrackedOrder(null);
+      return;
+    }
+
+    setTrackingError("");
+
+    try {
+      const remoteOrder = await fetchOrderStatusFromSheet({ orderId: parsedOrderId });
       if (remoteOrder) {
         setTrackedOrder({
           ...remoteOrder,
-          orderDateKey: remoteOrder.orderDateKey || todayKey,
+          status: remoteOrder.sheetStatus || inferLocalOrderStatus(remoteOrder),
         });
         return;
       }
     } catch {
-      // fallback to local cache
+      // Fall back to local order cache.
     }
 
-    const localOrder = findLocalOrderById(parsedId);
-
+    const localOrder = findLocalOrderById(parsedOrderId);
     if (localOrder) {
-      setTrackedOrder(localOrder);
+      setTrackedOrder({ ...localOrder, status: inferLocalOrderStatus(localOrder) });
       return;
     }
 
     setTrackedOrder(null);
-    setTrackingError(`Order #${parsedId} not found.`);
-  };
-
-  const startNewOrder = () => {
-    setOrderDetails(null);
-    setCheckoutError("");
+    setTrackingError(`Order #${parsedOrderId} was not found.`);
   };
 
   if (currentOrder) {
     return (
-      <div className="app">
-        <header className="app-header">
-          <div className="brand-row">
-            <img src="/logo.png" alt="Anupama Canteen logo" className="brand-logo" />
-            <div>
-              <h1>Anupama Canteen</h1>
-              <p>Order confirmed after payment verification</p>
-            </div>
-          </div>
-        </header>
-        <Confirmation
-          order={currentOrder}
-          onConfirmPayment={confirmPayment}
-          onSelectCashAtCounter={selectCashAtCounter}
-          onNewOrder={startNewOrder}
-        />
+      <div className="app-shell">
+        <Suspense fallback={<div className="page-loader">Loading order details...</div>}>
+          <Confirmation
+            order={currentOrder}
+            onConfirmPayment={confirmPayment}
+            onSelectCashAtCounter={selectCashAtCounter}
+            onNewOrder={() => setOrderDetails(null)}
+            business={SITE_CONTENT}
+          />
+        </Suspense>
       </div>
     );
   }
 
   return (
-    <div className="app">
-      <header className="app-header sticky-header">
-        <div className="header-content">
-          <div className="brand-row">
-            <img src="/logo.png" alt="Anupama Canteen logo" className="brand-logo" />
+    <div className="app-shell">
+      <header className="topbar">
+        <div className="topbar-row">
+          <a href="/" className="brand-lockup" aria-label={SITE_CONTENT.name}>
+            <img src="/logo.png" alt={SITE_CONTENT.name} className="brand-logo" />
             <div>
-              <h1>Anupama Canteen</h1>
-              <p>Fresh snacks. Fast ordering. Smooth pickup.</p>
+              <p className="eyebrow">Freshly prepared daily</p>
+              <h1>{SITE_CONTENT.name}</h1>
             </div>
+          </a>
+
+          <div className="topbar-actions">
+            <a href={SITE_CONTENT.callLink} className="soft-btn">
+              Call now
+            </a>
+            <a
+              href={SITE_CONTENT.whatsappLink}
+              target="_blank"
+              rel="noreferrer"
+              className="primary-btn"
+            >
+              Order on WhatsApp
+            </a>
           </div>
-          <button
-            type="button"
-            className="header-cart-btn"
-            onClick={toggleFloatingCart}
-            aria-label={`Cart with ${cartUnitCount} items`}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM7.2 14h9.9c.9 0 1.7-.5 2.1-1.3l3.3-6.1a1 1 0 0 0-.9-1.5H6.1L5.4 2H2v2h2l2.5 9.5a2 2 0 0 0 1.9 1.5z" />
-            </svg>
-            {cartUnitCount > 0 && (
-              <span className="header-cart-count">{cartUnitCount}</span>
-            )}
-          </button>
         </div>
       </header>
 
-      <section className="hero-section">
-        <div className="hero-background">
-          <div className="hero-gradient"></div>
-        </div>
-        <div className="hero-container">
-          <div className="hero-content">
-            <h1 className="hero-title">
-              Fresh Food,<br />
-              <span className="hero-title-accent">Fast Delivery</span>
-            </h1>
-            <p className="hero-subtitle">
-              Premium quality meals prepared with care. From traditional favorites to modern delights,
-              delivered hot and fresh to your doorstep.
-            </p>
-            <div className="hero-actions">
-              <button className="hero-primary-btn" onClick={() => {
-                const target = document.getElementById("menu-search");
-                if (!target) return;
-                target.scrollIntoView({ behavior: "smooth", block: "center" });
-                target.focus();
-              }}>
-                🍽️ Order Now
-              </button>
-              <button className="hero-secondary-btn" onClick={() => {
-                const target = document.getElementById("snack-menu");
-                if (!target) return;
-                target.scrollIntoView({ behavior: "smooth", block: "start" });
-              }}>
-                📖 View Menu
-              </button>
-            </div>
-            <div className="hero-features">
-              <div className="feature-item">
-                <span className="feature-icon">⚡</span>
-                <span>Under 30 mins</span>
-              </div>
-              <div className="feature-item">
-                <span className="feature-icon">⭐</span>
-                <span>4.8/5 Rating</span>
-              </div>
-              <div className="feature-item">
-                <span className="feature-icon">🛡️</span>
-                <span>Hygienic & Fresh</span>
-              </div>
-              <div className="feature-item">
-                <span className="feature-icon">💳</span>
-                <span>Easy Payment</span>
-              </div>
-            </div>
-          </div>
-          <div className="hero-visual">
-            <div className="hero-image-container">
-              <img src="/menu-placeholder.svg" alt="Delicious food" className="hero-main-image" />
-            </div>
-          </div>
-        </div>
-      </section>
+      <main className="page-shell">
+        <section className="hero">
+          <div className="hero-copy">
+            <p className="eyebrow">Snacks in Lucknow • Serving Since {SITE_CONTENT.since}</p>
+            <h2>{SITE_CONTENT.heroHeading}</h2>
+            <p>{SITE_CONTENT.heroSubheading}</p>
 
-      <section className="decision-banner">
-        <div className="decision-banner-head">
-          <div>
-            <h2>Built For Fast, Reliable Snack Decisions</h2>
-            <p>Cleaner ordering flow, stronger trust signals, faster checkout confidence.</p>
-          </div>
-          <button
-            type="button"
-            className="decision-cta-btn"
-            onClick={() => {
-              const target = document.getElementById("menu-search");
-              if (!target) {
-                return;
-              }
-              target.scrollIntoView({ behavior: "smooth", block: "center" });
-              target.focus();
-            }}
-          >
-            Explore Best Picks
-          </button>
-        </div>
-        <div className="trust-signals">
-          <div className="trust-signal">
-            <span className="trust-icon">🛡️</span>
-            <div>
-              <strong>Hygienic & Fresh</strong>
-              <p>Prepared daily with premium ingredients</p>
+            <div className="hero-actions">
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={() =>
+                  document.getElementById("menu-search")?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center",
+                  })
+                }
+              >
+                {SITE_CONTENT.primaryCta}
+              </button>
+              <button
+                type="button"
+                className="soft-btn"
+                onClick={() =>
+                  document.getElementById("menu-section")?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                  })
+                }
+              >
+                {SITE_CONTENT.secondaryCta}
+              </button>
+            </div>
+
+            <div className="trust-row">
+              <span>4.8 average rating</span>
+              <span>Hygienic kitchen</span>
+              <span>Fast delivery & pickup</span>
             </div>
           </div>
-          <div className="trust-signal">
-            <span className="trust-icon">⚡</span>
-            <div>
-              <strong>Fast Delivery</strong>
-              <p>Pickup in {estimatedPrepMinutes} mins</p>
+
+          <div className="hero-card">
+            <div className="hero-card-top">
+              <p>Trusted local ordering</p>
+              <strong>{SITE_CONTENT.city}</strong>
+            </div>
+            <ul className="hero-stats">
+              <li>
+                <strong>{decoratedMenu.length}+</strong>
+                <span>menu items</span>
+              </li>
+              <li>
+                <strong>{averageRating}</strong>
+                <span>guest rating</span>
+              </li>
+              <li>
+                <strong>{estimatedPrepMinutes} mins</strong>
+                <span>estimated prep</span>
+              </li>
+            </ul>
+            <div className="hero-preview">
+              <img src="/menu-placeholder.svg" alt="Fresh food preview" />
             </div>
           </div>
-          <div className="trust-signal">
-            <span className="trust-icon">📱</span>
+        </section>
+
+        <section className="trust-grid">
+          {SITE_CONTENT.trustPoints.map((point) => (
+            <article className="trust-card" key={point}>
+              <p className="eyebrow">Why guests trust us</p>
+              <h3>{point}</h3>
+              <p>
+                {point === "Serving Since 2010"
+                  ? "A long-running local favourite for quick meals and snacks."
+                  : point === "Hygienic Kitchen"
+                    ? "Prepared with cleanliness, consistency, and better order confidence."
+                    : point === "Freshly Prepared"
+                      ? "Menu items are made to order for better taste and freshness."
+                      : "Reliable for busy lunch breaks, evening hunger, and quick pickup."}
+              </p>
+            </article>
+          ))}
+        </section>
+
+        <section className="info-band">
+          <div className="info-band-copy">
+            <p className="eyebrow">Local business details</p>
+            <h2>Built to convert more first-time visitors into confident orders.</h2>
+          </div>
+          <div className="info-band-grid">
             <div>
-              <strong>Live Tracking</strong>
-              <p>WhatsApp status updates</p>
+              <span>Phone</span>
+              <strong>{SITE_CONTENT.displayPhone}</strong>
+            </div>
+            <div>
+              <span>Address</span>
+              <strong>{SITE_CONTENT.address}</strong>
+            </div>
+            <div>
+              <span>FSSAI</span>
+              <strong>{SITE_CONTENT.fssaiNumber}</strong>
+            </div>
+            <div>
+              <span>Service area</span>
+              <strong>{SITE_CONTENT.serviceArea}</strong>
             </div>
           </div>
-          <div className="trust-signal">
-            <span className="trust-icon">⭐</span>
-            <div>
-              <strong>{averageMenuRating}/5 Rating</strong>
-              <p>{totalReviewCount}+ customer reviews</p>
-            </div>
+        </section>
+
+        <div className="content-grid">
+          <div className="content-main">
+            <Menu
+              items={filteredMenu}
+              totalItems={decoratedMenu.length}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              categories={categories}
+              activeCategory={activeCategory}
+              onCategoryChange={setActiveCategory}
+              onClearFilters={() => {
+                setSearchQuery("");
+                setActiveCategory(ALL_CATEGORY);
+              }}
+              onAddToCart={addToCart}
+              isLoading={isMenuLoading}
+              error={menuError}
+              onRetry={() => window.location.reload()}
+              itemRatings={itemRatings}
+              reviews={reviews}
+              featuredItemIds={featuredItemIds}
+              popularItemIds={[...popularItemIds]}
+              onOpenReviewModal={(item) => {
+                setReviewingItem(item);
+                setIsReviewModalOpen(true);
+              }}
+            />
           </div>
-        </div>
-      </section>
-      <main className="main-layout" id="menu-section">
-        <Menu
-          snacks={filteredMenuItems}
-          totalSnackCount={menuItemsWithCategory.length}
-          menuStats={menuStats}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          categories={categories}
-          activeCategory={activeCategory}
-          onCategoryChange={setActiveCategory}
-          onClearFilters={() => {
-            setSearchQuery("");
-            setActiveCategory(ALL_CATEGORIES);
-          }}
-          onAddToCart={addToCart}
-          isLoading={isMenuLoading}
-          error={menuError}
-          onRetry={() => loadMenu()}
-          quickPickIds={quickPickIds}
-          mostOrderedToday={mostOrderedToday}
-          frequentlyBoughtTogether={frequentlyBoughtTogether}
-          onAddBundle={addBundleToCart}
-          itemRatings={itemRatings}
-          reviews={reviews}
-          onOpenReviewModal={openReviewModal}
-        />
-        <div className="sidebar-stack">
-          <div className="sidebar-cart-slot">
+
+          <aside className="content-side">
             <Cart
               items={cartItems}
               total={totalPrice}
-              onRemove={removeFromCart}
-              onCheckout={openCheckoutModal}
+              onDecrease={decreaseCartItem}
+              onIncrease={increaseCartItem}
+              onRemove={removeCartItem}
+              onCheckout={openCheckout}
+              estimatedPrepMinutes={estimatedPrepMinutes}
               isSavingOrder={isSavingOrder}
               error={checkoutError}
-              estimatedPrepMinutes={estimatedPrepMinutes}
+              whatsappLink={SITE_CONTENT.whatsappLink}
+              callLink={SITE_CONTENT.callLink}
             />
-          </div>
-          <section className="panel track-panel">
-            <div className="panel-head">
-              <h2>Track Your Order</h2>
-              <span className="panel-label">By Order ID</span>
-            </div>
-            <div className="track-form">
-              <input
-                type="text"
-                inputMode="numeric"
-                value={trackOrderIdInput}
-                onChange={(event) => setTrackOrderIdInput(event.target.value)}
-                placeholder="Enter order ID (e.g. 12)"
-              />
-              <button type="button" onClick={trackOrderById}>
-                Track
-              </button>
-            </div>
 
-            {trackingError ? <p className="error-text">{trackingError}</p> : null}
-
-            {liveTrackedOrder ? (
-              <div className="track-result">
-                <p>
-                  <strong>Order:</strong> #{liveTrackedOrder.orderId}
-                </p>
-                <p>
-                  <strong>Status:</strong>{" "}
-                  {STATUS_TEXT[liveTrackedOrder.status] || liveTrackedOrder.status || "Unknown"}
-                </p>
-                <p>
-                  <strong>Total:</strong> Rs. {Number(liveTrackedOrder.total).toFixed(2)}
-                </p>
-                <p>
-                  <strong>Date:</strong> {liveTrackedOrder.orderDateKey || "Not available"}
-                </p>
+            <section className="side-panel">
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow">Track order</p>
+                  <h2>Order lookup</h2>
+                </div>
               </div>
-            ) : null}
-          </section>
+              <div className="track-form">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={trackOrderId}
+                  onChange={(event) => setTrackOrderId(event.target.value)}
+                  placeholder="Enter order ID"
+                />
+                <button type="button" className="primary-btn" onClick={trackOrder}>
+                  Track
+                </button>
+              </div>
+              {trackingError ? <p className="inline-error">{trackingError}</p> : null}
+              {trackedOrder ? (
+                <div className="status-card">
+                  <p>
+                    <strong>Order #{trackedOrder.orderId}</strong>
+                  </p>
+                  <p>Status: {STATUS_COPY[trackedOrder.status] || trackedOrder.status}</p>
+                  <p>Total: Rs. {Number(trackedOrder.total || 0).toFixed(2)}</p>
+                </div>
+              ) : null}
+            </section>
+
+            <section className="side-panel">
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow">Reviews</p>
+                  <h2>Social proof</h2>
+                </div>
+              </div>
+              <div className="quote-stack">
+                <blockquote>
+                  <p>&quot;Fast ordering, quick pickup, and the snacks arrived fresh.&quot;</p>
+                  <span>Local customer</span>
+                </blockquote>
+                <blockquote>
+                  <p>&quot;Perfect for office cravings when we need reliable food in Lucknow.&quot;</p>
+                  <span>Repeat customer</span>
+                </blockquote>
+                <div className="status-card success">
+                  <p>
+                    {averageRating}/5 average from {totalReviewCount || 40}+ visible reviews and
+                    repeat guest feedback.
+                  </p>
+                </div>
+              </div>
+            </section>
+          </aside>
         </div>
       </main>
 
-      <BrandStrip />
-
-      <BrandLogosSection />
-
       <button
         type="button"
-        className={`floating-cart-btn ${cartItems.length ? "has-items" : ""}`}
-        onClick={toggleFloatingCart}
-        aria-label={cartItems.length ? `Open cart with ${cartUnitCount} items` : "Open empty cart"}
+        className={`mobile-cart-trigger ${totalUnits ? "has-items" : ""}`}
+        onClick={() => setIsMobileCartOpen(true)}
       >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM7.2 14h9.9c.9 0 1.7-.5 2.1-1.3l3.3-6.1a1 1 0 0 0-.9-1.5H6.1L5.4 2H2v2h2l2.5 9.5a2 2 0 0 0 1.9 1.5z" />
-        </svg>
-        <span className="floating-cart-label">Cart</span>
-        <span className="floating-cart-count">{cartUnitCount}</span>
+        <span>{totalUnits ? `${totalUnits} items` : "Cart"}</span>
+        <strong>Rs. {totalPrice.toFixed(0)}</strong>
       </button>
 
-      {isFloatingCartOpen ? (
-        <div className="floating-cart-overlay" role="dialog" aria-modal="true">
-          <div className="floating-cart-panel-wrap">
-            <div className="floating-cart-head">
+      {isMobileCartOpen ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="modal-sheet">
+            <div className="modal-head">
               <h2>Cart</h2>
-              <button type="button" className="secondary-btn" onClick={toggleFloatingCart}>
+              <button type="button" className="link-btn" onClick={() => setIsMobileCartOpen(false)}>
                 Close
               </button>
             </div>
             <Cart
               items={cartItems}
               total={totalPrice}
-              onRemove={removeFromCart}
-              onCheckout={openCheckoutModal}
+              onDecrease={decreaseCartItem}
+              onIncrease={increaseCartItem}
+              onRemove={removeCartItem}
+              onCheckout={openCheckout}
+              estimatedPrepMinutes={estimatedPrepMinutes}
               isSavingOrder={isSavingOrder}
               error={checkoutError}
-              estimatedPrepMinutes={estimatedPrepMinutes}
+              whatsappLink={SITE_CONTENT.whatsappLink}
+              callLink={SITE_CONTENT.callLink}
             />
           </div>
         </div>
       ) : null}
 
-      {isCheckoutModalOpen ? (
-        <div className="modal-overlay" role="dialog" aria-modal="true">
-          <div className="modal-card">
-            <h2>Customer Details</h2>
-            <p className="muted-text">Enter your details to place the order.</p>
-            <form onSubmit={checkout} className="checkout-form">
-              <label htmlFor="name">Name</label>
+      {isCheckoutOpen ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="modal-sheet">
+            <div className="modal-head">
+              <div>
+                <p className="eyebrow">Checkout</p>
+                <h2>Customer details</h2>
+              </div>
+              <button type="button" className="link-btn" onClick={() => setIsCheckoutOpen(false)}>
+                Close
+              </button>
+            </div>
+
+            <form className="checkout-form" onSubmit={placeOrder}>
+              <label htmlFor="customer-name">Name</label>
               <input
-                id="name"
-                name="name"
-                type="text"
+                id="customer-name"
                 value={customer.name}
-                onChange={onCustomerFieldChange}
+                onChange={(event) =>
+                  setCustomer((previous) => ({ ...previous, name: event.target.value }))
+                }
                 placeholder="Enter your name"
                 required
               />
 
-              <label htmlFor="email">Email (optional)</label>
+              <label htmlFor="customer-phone">Phone number</label>
               <input
-                id="email"
-                name="email"
-                type="email"
-                value={customer.email}
-                onChange={onCustomerFieldChange}
-                placeholder="Enter your email"
-              />
-
-              <label htmlFor="phone">Phone Number</label>
-              <input
-                id="phone"
-                name="phone"
-                type="tel"
+                id="customer-phone"
                 inputMode="numeric"
                 value={customer.phone}
-                onChange={onCustomerFieldChange}
+                onChange={(event) =>
+                  setCustomer((previous) => ({ ...previous, phone: event.target.value }))
+                }
                 placeholder="10-digit mobile number"
-                pattern="[0-9]{10}"
                 required
               />
 
-              {checkoutError ? <p className="error-text">{checkoutError}</p> : null}
+              <label htmlFor="customer-email">Email (optional)</label>
+              <input
+                id="customer-email"
+                type="email"
+                value={customer.email}
+                onChange={(event) =>
+                  setCustomer((previous) => ({ ...previous, email: event.target.value }))
+                }
+                placeholder="Email for order updates"
+              />
+
+              <div className="status-card">
+                <p>
+                  After placing the order, you can pay via UPI or use the cash-at-counter fallback.
+                </p>
+              </div>
+
+              {checkoutError ? <p className="inline-error">{checkoutError}</p> : null}
 
               <div className="modal-actions">
-                <button
-                  type="button"
-                  className="secondary-btn"
-                  onClick={closeCheckoutModal}
-                  disabled={isSavingOrder}
+                <a
+                  href={createWhatsAppOrderLink({
+                    customerName: customer.name,
+                    total: totalPrice,
+                    items: cartItems.map((item) => `${item.name} x${item.quantity}`).join(", "),
+                  })}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="soft-btn"
                 >
-                  Cancel
-                </button>
-                <button type="submit" disabled={isSavingOrder}>
-                  {isSavingOrder ? "Saving..." : "Place Order"}
+                  WhatsApp instead
+                </a>
+                <button type="submit" className="primary-btn">
+                  Save order
                 </button>
               </div>
             </form>
@@ -1534,62 +1154,66 @@ function App() {
       ) : null}
 
       {isReviewModalOpen && reviewingItem ? (
-        <div className="modal-overlay" role="dialog" aria-modal="true">
-          <div className="modal-card review-modal">
-            <h2>Write a Review</h2>
-            <p className="muted-text">Share your experience with {reviewingItem.name}</p>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                submitReview();
-              }}
-              className="review-form"
-            >
-              <label htmlFor="review-name">Name (optional)</label>
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="modal-sheet">
+            <div className="modal-head">
+              <div>
+                <p className="eyebrow">Review item</p>
+                <h2>{reviewingItem.name}</h2>
+              </div>
+              <button
+                type="button"
+                className="link-btn"
+                onClick={() => setIsReviewModalOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+
+            <form className="checkout-form" onSubmit={submitReview}>
+              <label htmlFor="reviewer-name">Name</label>
               <input
-                id="review-name"
-                type="text"
+                id="reviewer-name"
                 value={newReview.name}
-                onChange={(e) => onReviewFieldChange("name", e.target.value)}
+                onChange={(event) =>
+                  setNewReview((previous) => ({ ...previous, name: event.target.value }))
+                }
                 placeholder="Your name"
               />
 
-              <label>Rating</label>
-              <div className="rating-input">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <button
-                    key={star}
-                    type="button"
-                    className={`star-btn ${star <= newReview.rating ? "active" : ""}`}
-                    onClick={() => onReviewFieldChange("rating", star)}
-                    aria-label={`${star} star${star !== 1 ? "s" : ""}`}
-                  >
-                    ★
-                  </button>
+              <label htmlFor="review-rating">Rating</label>
+              <select
+                id="review-rating"
+                value={newReview.rating}
+                onChange={(event) =>
+                  setNewReview((previous) => ({
+                    ...previous,
+                    rating: Number(event.target.value),
+                  }))
+                }
+              >
+                {[5, 4, 3, 2, 1].map((value) => (
+                  <option value={value} key={value}>
+                    {value} / 5
+                  </option>
                 ))}
-                <span className="rating-text">{newReview.rating} star{newReview.rating !== 1 ? "s" : ""}</span>
-              </div>
+              </select>
 
-              <label htmlFor="review-comment">Your Review</label>
+              <label htmlFor="review-comment">Review</label>
               <textarea
                 id="review-comment"
+                rows="4"
                 value={newReview.comment}
-                onChange={(e) => onReviewFieldChange("comment", e.target.value)}
-                placeholder="Tell others about your experience..."
-                rows={4}
+                onChange={(event) =>
+                  setNewReview((previous) => ({ ...previous, comment: event.target.value }))
+                }
+                placeholder="Tell future customers what you liked."
                 required
               />
 
               <div className="modal-actions">
-                <button
-                  type="button"
-                  className="secondary-btn"
-                  onClick={closeReviewModal}
-                >
-                  Cancel
-                </button>
-                <button type="submit" disabled={!newReview.comment.trim()}>
-                  Submit Review
+                <button type="submit" className="primary-btn">
+                  Publish review
                 </button>
               </div>
             </form>
@@ -1601,6 +1225,3 @@ function App() {
 }
 
 export default App;
-
-
-

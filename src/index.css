@@ -1,5 +1,3 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600;700;800&display=swap");
-
 html,
 body,
 #root {
@@ -9,14 +7,19 @@ body,
 
 html {
   background:
-    radial-gradient(circle at 12% 10%, rgba(220, 38, 38, 0.08), transparent 40%),
-    radial-gradient(circle at 88% 90%, rgba(234, 88, 12, 0.06), transparent 45%),
-    linear-gradient(180deg, #fff8f5 0%, #fef2f0 42%, #fdf6f0 100%);
+    radial-gradient(circle at top left, rgba(194, 65, 12, 0.12), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(20, 83, 45, 0.1), transparent 24%),
+    linear-gradient(180deg, #fff8f2 0%, #fff4ea 100%);
 }
 
 body {
-  font-family: "Inter", "Poppins", -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  color: #17221b;
+  color: #20150f;
   line-height: 1.5;
-  scroll-behavior: smooth;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: inherit;
 }

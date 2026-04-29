@@ -2,10 +2,16 @@ const ORDERS_API_URL = process.env.REACT_APP_ORDERS_API_URL;
 const MENU_API_URL = process.env.REACT_APP_MENU_API_URL || "/api/menu";
 const APPEND_ORDER_ENDPOINT =
   process.env.REACT_APP_APPEND_ORDER_ENDPOINT || "/append-order";
-const DEFAULT_MENU_IMAGE = "/menu-placeholder.svg";
-const MENU_CACHE_KEY = "anupama:menu:cache:v1";
-const ORDER_POST_ACTION = process.env.REACT_APP_ORDER_POST_ACTION || "appendOrder";
 const TRACK_ORDER_ACTION = process.env.REACT_APP_TRACK_ORDER_ACTION || "trackOrder";
+const ORDER_POST_ACTION = process.env.REACT_APP_ORDER_POST_ACTION || "appendOrder";
+const DEFAULT_MENU_IMAGE = "/menu-placeholder.svg";
+const MENU_CACHE_KEY = "anupama:menu:cache:v2";
+const MENU_CACHE_TTL_MS = 1000 * 60 * 15;
+
+let inFlightMenuRequest = null;
+let memoryMenuCache = [];
+let memoryMenuCacheAt = 0;
+
 const STABLE_MENU_IMAGE_BY_NAME = {
   "vada pav":
     "https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=800&q=80",
@@ -29,11 +35,20 @@ const STABLE_MENU_IMAGE_BY_NAME = {
   tea: "https://images.unsplash.com/photo-1564890369478-c89ca6d9cde9?auto=format&fit=crop&w=800&q=80",
   coffee:
     "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=800&q=80",
-  "veg noodles half":
-    "https://images.unsplash.com/photo-1617093727343-374698b1b08d?auto=format&fit=crop&w=800&q=80",
-  "veg noodles full":
-    "https://images.unsplash.com/photo-1617093727343-374698b1b08d?auto=format&fit=crop&w=800&q=80",
 };
+
+export const FALLBACK_MENU_DATA = [
+  { id: "fallback-1", name: "Vada Pav", price: 40, category: "Snacks", active: true },
+  { id: "fallback-2", name: "Cheese Vada Pav", price: 50, category: "Snacks", active: true },
+  { id: "fallback-3", name: "Club Sandwich", price: 30, category: "Snacks", active: true },
+  { id: "fallback-4", name: "Dosa", price: 70, category: "Breakfast", active: true },
+  { id: "fallback-5", name: "Tea", price: 20, category: "Beverages", active: true },
+  { id: "fallback-6", name: "Veg Noodles Full", price: 70, category: "Meals", active: true },
+].map((item, index) => ({
+  ...item,
+  image: normalizeImageUrl(item.image, item.name),
+  id: item.id || `fallback-${index + 1}`,
+}));
 
 const hasConfiguredValue = (value) =>
   typeof value === "string" &&
@@ -41,21 +56,45 @@ const hasConfiguredValue = (value) =>
   !value.startsWith("YOUR_") &&
   !value.includes("<");
 
+const normalizeNameKey = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+
+function normalizeImageUrl(value, name) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return STABLE_MENU_IMAGE_BY_NAME[normalizeNameKey(name)] || DEFAULT_MENU_IMAGE;
+  }
+
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol === "http:") {
+      parsed.protocol = "https:";
+    }
+
+    if (!["https:", "http:"].includes(parsed.protocol)) {
+      return STABLE_MENU_IMAGE_BY_NAME[normalizeNameKey(name)] || DEFAULT_MENU_IMAGE;
+    }
+
+    return parsed.toString();
+  } catch {
+    return STABLE_MENU_IMAGE_BY_NAME[normalizeNameKey(name)] || DEFAULT_MENU_IMAGE;
+  }
+}
+
 const toBoolean = (value) => {
   if (typeof value === "boolean") {
     return value;
   }
-
   if (typeof value === "number") {
     return value === 1;
   }
-
-  if (typeof value === "string") {
-    const normalized = value.trim().toLowerCase();
-    return ["1", "true", "yes", "y", "active"].includes(normalized);
-  }
-
-  return false;
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  return ["1", "true", "yes", "y", "active"].includes(normalized);
 };
 
 const toNumber = (value) => {
@@ -65,56 +104,15 @@ const toNumber = (value) => {
 
 const pickField = (source, keys, fallback = "") => {
   for (const key of keys) {
-    if (key in source) {
+    if (source && source[key] !== undefined && source[key] !== null && source[key] !== "") {
       return source[key];
     }
   }
   return fallback;
 };
 
-const normalizeNameKey = (value) =>
-  String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ");
-
-const stableImageForName = (name) =>
-  STABLE_MENU_IMAGE_BY_NAME[normalizeNameKey(name)] || DEFAULT_MENU_IMAGE;
-
-const normalizeImageUrl = (value, name) => {
-  const raw = String(value || "").trim();
-  if (!raw) {
-    return stableImageForName(name);
-  }
-
-  try {
-    const parsed = new URL(raw);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-      return stableImageForName(name);
-    }
-
-    if (parsed.hostname === "source.unsplash.com") {
-      return stableImageForName(name);
-    }
-
-    if (parsed.protocol === "http:") {
-      parsed.protocol = "https:";
-      return parsed.toString();
-    }
-
-    return parsed.toString();
-  } catch {
-    return stableImageForName(name);
-  }
-};
-
-function normalizeMenuRow(rawRow, index) {
-  if (!rawRow || typeof rawRow !== "object") {
-    return null;
-  }
-
-  const id = String(pickField(rawRow, ["id", "ID", "Id"], index + 1));
-  const name = String(pickField(rawRow, ["name", "Name"])).trim();
+const normalizeMenuRow = (rawRow, index) => {
+  const name = String(pickField(rawRow, ["name", "Name"], "")).trim();
   const price = toNumber(pickField(rawRow, ["price", "Price"], ""));
   const image = String(
     pickField(rawRow, ["image", "Image", "imageUrl", "imageURL"], "")
@@ -124,147 +122,114 @@ function normalizeMenuRow(rawRow, index) {
   ).trim();
   const active = toBoolean(pickField(rawRow, ["active", "Active"], true));
 
-  if (!name || Number.isNaN(price)) {
+  if (!name || Number.isNaN(price) || !active) {
     return null;
   }
 
   return {
-    id,
+    id: String(pickField(rawRow, ["id", "ID", "Id"], index + 1)),
     name,
     price,
     image: normalizeImageUrl(image, name),
     category,
     active,
   };
-}
+};
 
-export const readCachedMenuItems = () => {
+const readCacheRecord = () => {
   if (typeof window === "undefined") {
-    return [];
+    return null;
   }
 
   try {
     const raw = localStorage.getItem(MENU_CACHE_KEY);
     if (!raw) {
-      return [];
+      return null;
     }
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
+    if (!Array.isArray(parsed.items)) {
+      return null;
     }
-    return parsed.map((row, index) => normalizeMenuRow(row, index)).filter((row) => row && row.active);
+    return parsed;
   } catch {
-    return [];
+    return null;
   }
 };
 
-const writeCachedMenuItems = (items) => {
-  if (typeof window === "undefined" || !Array.isArray(items) || !items.length) {
+const writeCacheRecord = (items) => {
+  if (typeof window === "undefined") {
     return;
   }
 
+  const record = {
+    items,
+    updatedAt: Date.now(),
+  };
+
   try {
-    localStorage.setItem(MENU_CACHE_KEY, JSON.stringify(items));
+    localStorage.setItem(MENU_CACHE_KEY, JSON.stringify(record));
   } catch {
-    // Ignore localStorage quota/security errors
+    // Ignore storage failures and continue with memory cache.
   }
 };
 
-// Fallback menu data - ensures app works even if API is down
-export const FALLBACK_MENU_DATA = [
-  {
-    id: "fallback-1",
-    name: "Vada Pav",
-    price: 25,
-    image: STABLE_MENU_IMAGE_BY_NAME["vada pav"],
-    category: "Quick Bites",
-    active: true,
-  },
-  {
-    id: "fallback-2",
-    name: "Cheese Vada Pav",
-    price: 35,
-    image: STABLE_MENU_IMAGE_BY_NAME["cheese vada pav"],
-    category: "Quick Bites",
-    active: true,
-  },
-  {
-    id: "fallback-3",
-    name: "Dosa",
-    price: 40,
-    image: STABLE_MENU_IMAGE_BY_NAME["dosa"],
-    category: "South Indian",
-    active: true,
-  },
-  {
-    id: "fallback-4",
-    name: "Samosa",
-    price: 15,
-    image: STABLE_MENU_IMAGE_BY_NAME["samosa"],
-    category: "Quick Bites",
-    active: true,
-  },
-  {
-    id: "fallback-5",
-    name: "Tea",
-    price: 10,
-    image: STABLE_MENU_IMAGE_BY_NAME["tea"],
-    category: "Beverages",
-    active: true,
-  },
-  {
-    id: "fallback-6",
-    name: "Coffee",
-    price: 15,
-    image: STABLE_MENU_IMAGE_BY_NAME["coffee"],
-    category: "Beverages",
-    active: true,
-  },
-  {
-    id: "fallback-7",
-    name: "Club Sandwich",
-    price: 60,
-    image: STABLE_MENU_IMAGE_BY_NAME["club sandwich"],
-    category: "Quick Bites",
-    active: true,
-  },
-  {
-    id: "fallback-8",
-    name: "Veg Noodles (Half)",
-    price: 50,
-    image: STABLE_MENU_IMAGE_BY_NAME["veg noodles half"],
-    category: "Meals",
-    active: true,
-  },
-];
+export const readCachedMenuItems = () => {
+  const record = readCacheRecord();
+  if (!record?.items?.length) {
+    return [];
+  }
 
-const fetchWithTimeout = (url, options = {}, timeoutMs = 8000) => {
-  return Promise.race([
-    fetch(url, options),
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("request_timeout")), timeoutMs)
-    ),
-  ]);
+  return record.items
+    .map((item, index) => normalizeMenuRow(item, index))
+    .filter(Boolean);
 };
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const getMenuCandidates = () => {
+  const candidates = [{ label: "menu_proxy", url: "/api/menu" }];
 
-const retryWithBackoff = async (fn, maxAttempts = 3, initialDelayMs = 500) => {
-  let lastError;
+  if (hasConfiguredValue(MENU_API_URL) && String(MENU_API_URL).trim() !== "/api/menu") {
+    candidates.push({ label: "menu_env", url: MENU_API_URL });
+  }
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  if (hasConfiguredValue(ORDERS_API_URL)) {
+    candidates.push({ label: "orders_env", url: ORDERS_API_URL });
+  }
+
+  return candidates;
+};
+
+const fetchJson = async (url, options = {}, timeoutMs = 7000) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    return await response.json();
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
+
+const sleep = (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs));
+
+const withRetry = async (task, attempts = 3) => {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      return await fn();
+      return await task();
     } catch (error) {
       lastError = error;
-      console.warn(
-        `[Menu Fetch] Attempt ${attempt}/${maxAttempts} failed:`,
-        error?.message || error
-      );
-
-      if (attempt < maxAttempts) {
-        const delayMs = initialDelayMs * Math.pow(2, attempt - 1);
-        await sleep(delayMs);
+      if (attempt < attempts) {
+        await sleep(250 * 2 ** (attempt - 1));
       }
     }
   }
@@ -272,100 +237,149 @@ const retryWithBackoff = async (fn, maxAttempts = 3, initialDelayMs = 500) => {
   throw lastError;
 };
 
-export async function fetchActiveMenuItems() {
-  const baseOrigin =
-    typeof window !== "undefined" ? window.location.origin : "http://localhost";
-  const attempts = [];
+const parseMenuPayload = (payload) => {
+  const rows = Array.isArray(payload?.items)
+    ? payload.items
+    : Array.isArray(payload)
+      ? payload
+      : [];
 
-  console.log("[Menu Fetch] Starting menu fetch from base origin:", baseOrigin);
+  return rows.map((row, index) => normalizeMenuRow(row, index)).filter(Boolean);
+};
 
-  const readMenuRows = async (rawUrl) => {
-    const menuUrl = new URL(rawUrl, baseOrigin);
-    if (menuUrl.pathname !== "/api/menu") {
-      menuUrl.searchParams.set("action", "menu");
-    }
+export async function fetchActiveMenuItems({ force = false } = {}) {
+  const cachedRecord = readCacheRecord();
+  const hasFreshMemoryCache =
+    !force &&
+    memoryMenuCache.length > 0 &&
+    Date.now() - memoryMenuCacheAt < MENU_CACHE_TTL_MS;
 
-    console.log(`[Menu Fetch] Attempting to fetch from: ${menuUrl.toString()}`);
-
-    const response = await fetchWithTimeout(menuUrl.toString(), {
-      method: "GET",
-      mode: "cors",
-      headers: {
-        Accept: "application/json",
-      },
-    });
-
-    if (!response.ok) {
-      console.error(`[Menu Fetch] HTTP ${response.status} from ${menuUrl.toString()}`);
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const payload = await response.json();
-    console.log(`[Menu Fetch] Successfully fetched from ${menuUrl.toString()}`);
-    return Array.isArray(payload?.items)
-      ? payload.items
-      : Array.isArray(payload)
-        ? payload
-        : [];
-  };
-
-  const candidates = [{ label: "menu_proxy", url: "/api/menu" }];
-  if (hasConfiguredValue(MENU_API_URL) && String(MENU_API_URL).trim() !== "/api/menu") {
-    candidates.push({ label: "menu_api_url", url: MENU_API_URL });
-  }
-  if (hasConfiguredValue(ORDERS_API_URL)) {
-    candidates.push({ label: "orders_api_url", url: ORDERS_API_URL });
+  if (hasFreshMemoryCache) {
+    return memoryMenuCache;
   }
 
-  if (!candidates.length) {
-    console.error("[Menu Fetch] No API candidates configured");
-    throw new Error("Set REACT_APP_MENU_API_URL or REACT_APP_ORDERS_API_URL in .env");
+  const hasFreshLocalCache =
+    !force &&
+    cachedRecord?.items?.length &&
+    Date.now() - Number(cachedRecord.updatedAt || 0) < MENU_CACHE_TTL_MS;
+
+  if (hasFreshLocalCache) {
+    memoryMenuCache = readCachedMenuItems();
+    memoryMenuCacheAt = Number(cachedRecord.updatedAt || Date.now());
+    return memoryMenuCache;
   }
 
-  for (const candidate of candidates) {
-    try {
-      const rows = await retryWithBackoff(() => readMenuRows(candidate.url), 2, 500);
-      const normalizedRows = rows
-        .map((row, index) => normalizeMenuRow(row, index))
-        .filter((row) => row && row.active);
+  if (inFlightMenuRequest && !force) {
+    return inFlightMenuRequest;
+  }
 
-      if (normalizedRows.length) {
-        writeCachedMenuItems(normalizedRows);
-        console.log(
-          `[Menu Fetch] Successfully loaded ${normalizedRows.length} items from ${candidate.label}`
+  inFlightMenuRequest = (async () => {
+    const candidates = getMenuCandidates();
+    const failures = [];
+
+    for (const candidate of candidates) {
+      try {
+        const menuUrl = new URL(
+          candidate.url,
+          typeof window !== "undefined" ? window.location.origin : "http://localhost"
         );
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`[Menu Fetch] Raw API count: ${rows.length}, Filtered active: ${normalizedRows.length}`);
+        if (menuUrl.pathname !== "/api/menu") {
+          menuUrl.searchParams.set("action", "menu");
         }
-        return normalizedRows;
+
+        const payload = await withRetry(
+          () =>
+            fetchJson(menuUrl.toString(), {
+              method: "GET",
+              headers: { Accept: "application/json" },
+            }),
+          2
+        );
+
+        const normalized = parseMenuPayload(payload);
+        if (normalized.length) {
+          memoryMenuCache = normalized;
+          memoryMenuCacheAt = Date.now();
+          writeCacheRecord(normalized);
+          return normalized;
+        }
+      } catch (error) {
+        failures.push(`${candidate.label}: ${error?.message || "failed"}`);
       }
-    } catch (error) {
-      const errorMsg = error?.message || "failed";
-      attempts.push(`${candidate.label}: ${errorMsg}`);
-      console.warn(`[Menu Fetch] Failed ${candidate.label}:`, errorMsg);
+    }
+
+    const cached = readCachedMenuItems();
+    if (cached.length) {
+      memoryMenuCache = cached;
+      memoryMenuCacheAt = Date.now();
+      return cached;
+    }
+
+    if (failures.length) {
+      console.warn("[Menu] Using fallback data after failures:", failures.join(" | "));
+    }
+
+    return FALLBACK_MENU_DATA;
+  })();
+
+  try {
+    return await inFlightMenuRequest;
+  } finally {
+    inFlightMenuRequest = null;
+  }
+}
+
+const evaluateForwardResponse = async (response) => {
+  const text = await response.text().catch(() => "");
+  const trimmed = text.trim();
+
+  if (!response.ok) {
+    return { ok: false, detail: `HTTP ${response.status} ${trimmed}`.trim() };
+  }
+
+  if (!trimmed) {
+    return { ok: true, payload: null };
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed?.ok === false || parsed?.success === false || parsed?.error) {
+      return { ok: false, detail: parsed.error || parsed.message || trimmed };
+    }
+    return { ok: true, payload: parsed, detail: trimmed };
+  } catch {
+    return { ok: !/error|failed|invalid|missing/i.test(trimmed), detail: trimmed };
+  }
+};
+
+const toPositiveInt = (value) => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const extractOrderId = (value) => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const direct = [
+    value.orderId,
+    value.id,
+    value.order_id,
+    value.orderNumber,
+    value.order_number,
+    value.sheetOrderId,
+  ];
+
+  for (const entry of direct) {
+    const parsed = toPositiveInt(entry);
+    if (parsed) {
+      return parsed;
     }
   }
 
-  // Try to use cached menu
-  const cachedItems = readCachedMenuItems();
-  if (cachedItems.length) {
-    console.log(
-      `[Menu Fetch] Using cached menu with ${cachedItems.length} items (API unavailable)`
-    );
-    return cachedItems;
-  }
-
-  // Use fallback menu as last resort
-  console.warn(
-    "[Menu Fetch] All API endpoints failed and no cache available. Using fallback menu data."
-  );
-  console.warn(`[Menu Fetch] Failed attempts: ${attempts.join(" | ")}`);
-  console.log(`[Menu Fetch] Fallback menu has ${FALLBACK_MENU_DATA.length} items`);
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`[Menu Fetch] Using fallback due to API failures`);
-  }
-  return FALLBACK_MENU_DATA;
-}
+  return extractOrderId(value.order) || extractOrderId(value.data) || extractOrderId(value.result);
+};
 
 const buildOrderPayload = ({
   orderId,
@@ -380,36 +394,108 @@ const buildOrderPayload = ({
 }) => ({
   action: ORDER_POST_ACTION,
   orderId: String(orderId),
-  orderDate: orderDateKey || "",
+  orderDate: orderDateKey,
   customerName,
-  customerEmail,
+  customerEmail: customerEmail || "",
   customerPhone,
   items,
   total: Number(total).toFixed(2),
   timestamp,
-  status: status || "payment_verified",
+  status,
   name: customerName,
-  email: customerEmail,
+  email: customerEmail || "",
   phone: customerPhone,
 });
 
-const buildLegacyOrderPayload = ({
-  orderId,
-  customerName,
-  customerEmail,
-  customerPhone,
-  items,
-  total,
-  timestamp,
-}) => ({
-  orderId: String(orderId),
-  customerName,
-  customerEmail,
-  customerPhone,
-  items,
-  total: Number(total).toFixed(2),
-  timestamp,
-});
+export async function appendOrderToSheet(orderData) {
+  const payload = buildOrderPayload(orderData);
+  const attempts = [];
+
+  const proxyRequest = async () => {
+    const response = await fetch(APPEND_ORDER_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+    return evaluateForwardResponse(response);
+  };
+
+  try {
+    const proxyResult = await withRetry(proxyRequest, 2);
+    if (proxyResult.ok) {
+      return {
+        ok: true,
+        orderId: extractOrderId(proxyResult.payload) || toPositiveInt(orderData.orderId),
+      };
+    }
+    attempts.push(`proxy: ${proxyResult.detail}`);
+  } catch (error) {
+    attempts.push(`proxy: ${error?.message || "network_error"}`);
+  }
+
+  if (!hasConfiguredValue(ORDERS_API_URL)) {
+    throw new Error(
+      `Order could not be synced right now. Please call or WhatsApp us. ${attempts.join(" | ")}`
+    );
+  }
+
+  const upstreamVariants = [
+    {
+      label: "form",
+      request: () =>
+        fetch(ORDERS_API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+          body: new URLSearchParams(payload).toString(),
+        }),
+    },
+    {
+      label: "json",
+      request: () =>
+        fetch(ORDERS_API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify(payload),
+        }),
+    },
+    {
+      label: "query",
+      request: () => {
+        const url = new URL(ORDERS_API_URL);
+        Object.entries(payload).forEach(([key, value]) => {
+          url.searchParams.set(key, value);
+        });
+        return fetch(url.toString(), { method: "GET" });
+      },
+    },
+  ];
+
+  for (const variant of upstreamVariants) {
+    try {
+      const result = await withRetry(async () => {
+        const response = await variant.request();
+        return evaluateForwardResponse(response);
+      }, 2);
+
+      if (result.ok) {
+        return {
+          ok: true,
+          orderId: extractOrderId(result.payload) || toPositiveInt(orderData.orderId),
+        };
+      }
+      attempts.push(`${variant.label}: ${result.detail}`);
+    } catch (error) {
+      attempts.push(`${variant.label}: ${error?.message || "network_error"}`);
+    }
+  }
+
+  throw new Error(
+    `Order could not be synced right now. Please call or WhatsApp us. ${attempts.join(" | ")}`
+  );
+}
 
 const normalizeStatus = (value) => {
   const normalized = String(value || "")
@@ -420,377 +506,107 @@ const normalizeStatus = (value) => {
   const map = {
     pending_payment: "pending_payment",
     awaiting_payment: "pending_payment",
-    payment_pending: "pending_payment",
     payment_verified: "payment_verified",
     paid: "payment_verified",
     preparing: "preparing",
-    in_kitchen: "preparing",
     cooking: "preparing",
     ready: "ready_for_pickup",
     ready_for_pickup: "ready_for_pickup",
     delivered: "delivered",
-    delivered_successfully: "delivered",
-    complete: "delivered",
     completed: "delivered",
     cancelled: "cancelled",
     canceled: "cancelled",
   };
 
-  return map[normalized] || "";
-};
-
-const readField = (source, keys, fallback = "") => {
-  for (const key of keys) {
-    if (source && source[key] !== undefined && source[key] !== null && source[key] !== "") {
-      return source[key];
-    }
-  }
-  return fallback;
+  return map[normalized] || normalized;
 };
 
 const normalizeTrackedOrder = (rawOrder) => {
-  if (!rawOrder || typeof rawOrder !== "object") {
+  const orderId = toPositiveInt(
+    pickField(rawOrder, ["orderId", "Order ID", "id", "OrderId"], null)
+  );
+  if (!orderId) {
     return null;
   }
-
-  const orderIdValue = readField(rawOrder, ["orderId", "id", "Order ID", "OrderId"], "");
-  const orderId = Number(orderIdValue);
-  if (!Number.isInteger(orderId) || orderId <= 0) {
-    return null;
-  }
-
-  const statusRaw = readField(rawOrder, ["status", "Status", "orderStatus"], "");
-  const status = normalizeStatus(statusRaw);
 
   return {
     orderId,
-    orderDateKey: String(readField(rawOrder, ["orderDate", "date", "Date"], "") || ""),
-    total: Number(readField(rawOrder, ["total", "Total", "amount"], 0)) || 0,
-    items: String(readField(rawOrder, ["items", "Items"], "") || ""),
-    paidAt: String(readField(rawOrder, ["paidAt", "paymentTime", "timestamp"], "") || ""),
-    sheetStatus: status || "",
+    orderDateKey: String(pickField(rawOrder, ["orderDate", "Date", "date"], "") || ""),
+    total: Number(pickField(rawOrder, ["total", "Total", "amount"], 0)) || 0,
+    items: String(pickField(rawOrder, ["items", "Items"], "") || ""),
+    paidAt: String(
+      pickField(rawOrder, ["paidAt", "timestamp", "paymentTime", "Timestamp"], "") || ""
+    ),
+    sheetStatus: normalizeStatus(
+      pickField(rawOrder, ["status", "Status", "orderStatus"], "")
+    ),
   };
 };
-
-const looksLikeFailureText = (text) => {
-  const normalized = String(text || "").trim().toLowerCase();
-  if (!normalized) {
-    return false;
-  }
-
-  return [
-    "error",
-    "failed",
-    "missing",
-    "invalid",
-    "unauthorized",
-    "forbidden",
-    "exception",
-    "not configured",
-  ].some((token) => normalized.includes(token));
-};
-
-const evaluateHttpResult = async (response) => {
-  const bodyText = await response.text().catch(() => "");
-
-  if (!response.ok) {
-    return {
-      ok: false,
-      detail: `HTTP ${response.status} ${bodyText}`.trim(),
-    };
-  }
-
-  const trimmed = bodyText.trim();
-  if (!trimmed) {
-    return { ok: true, detail: "HTTP 200 (empty body)" };
-  }
-
-  try {
-    const parsed = JSON.parse(trimmed);
-    if (parsed && typeof parsed === "object") {
-      if (parsed.ok === false || parsed.success === false || parsed.error) {
-        return {
-          ok: false,
-          detail: parsed.error || parsed.message || trimmed,
-        };
-      }
-
-      if (parsed.ok === true || parsed.success === true) {
-        return { ok: true, detail: "accepted", payload: parsed };
-      }
-
-      return { ok: true, detail: trimmed, payload: parsed };
-    }
-  } catch {
-    // non-JSON response body
-  }
-
-  if (looksLikeFailureText(trimmed)) {
-    return { ok: false, detail: trimmed };
-  }
-
-  return { ok: true, detail: trimmed };
-};
-
-const toPositiveInt = (value) => {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-};
-
-const extractOrderIdFromObject = (source) => {
-  if (!source || typeof source !== "object") {
-    return null;
-  }
-
-  const direct = [
-    source.orderId,
-    source.id,
-    source.order_id,
-    source.orderNumber,
-    source.order_number,
-    source.sheetOrderId,
-    source.sheet_order_id,
-  ];
-
-  for (const candidate of direct) {
-    const parsed = toPositiveInt(candidate);
-    if (parsed) {
-      return parsed;
-    }
-  }
-
-  const nestedCandidates = [source.order, source.data, source.result];
-  for (const nested of nestedCandidates) {
-    const parsed = extractOrderIdFromObject(nested);
-    if (parsed) {
-      return parsed;
-    }
-  }
-
-  return null;
-};
-
-const extractOrderIdFromText = (text) => {
-  const raw = String(text || "").trim();
-  if (!raw) {
-    return null;
-  }
-
-  const withLabel = raw.match(/\b(?:order[\s_-]?(?:id|number)?|id)\D+(\d+)\b/i);
-  if (withLabel) {
-    return toPositiveInt(withLabel[1]);
-  }
-
-  return toPositiveInt(raw);
-};
-
-export async function appendOrderToSheet(orderData) {
-  const payloadData = buildOrderPayload(orderData);
-  const proxyPayloadData = {
-    ...payloadData,
-    orderDateKey: orderData?.orderDateKey || "",
-  };
-  const legacyPayloadData = buildLegacyOrderPayload(orderData);
-  const formPayload = new URLSearchParams(payloadData);
-  const legacyFormPayload = new URLSearchParams(legacyPayloadData);
-  const requestAttempts = [];
-
-  const tryRequest = async (label, requestFn) => {
-    try {
-      const response = await requestFn();
-      const evaluated = await evaluateHttpResult(response);
-      if (evaluated.ok) {
-        const payloadOrderId = extractOrderIdFromObject(evaluated.payload);
-        const detailOrderId = extractOrderIdFromText(evaluated.detail);
-        return {
-          ok: true,
-          orderId: payloadOrderId || detailOrderId || null,
-        };
-      }
-
-      requestAttempts.push(`${label}: ${evaluated.detail}`.trim());
-      return { ok: false };
-    } catch (error) {
-      requestAttempts.push(`${label}: ${error?.message || "Network/CORS error"}`);
-      return { ok: false };
-    }
-  };
-
-  const proxyResult = await tryRequest("POST append-order proxy", () =>
-    fetch(APPEND_ORDER_ENDPOINT, {
-      method: "POST",
-      mode: "cors",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(proxyPayloadData),
-    })
-  );
-
-  if (proxyResult.ok) {
-    return { ok: true, orderId: proxyResult.orderId || toPositiveInt(orderData?.orderId) };
-  }
-
-  if (!hasConfiguredValue(ORDERS_API_URL)) {
-    throw new Error(
-      `Order temporarily unavailable. Please call us directly. Attempts: ${requestAttempts.join(
-        " | "
-      )}`
-    );
-  }
-
-  const formResult = await tryRequest("POST form(action)", () =>
-    fetch(ORDERS_API_URL, {
-      method: "POST",
-      mode: "cors",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-      },
-      body: formPayload.toString(),
-    })
-  );
-
-  if (formResult.ok) {
-    return { ok: true, orderId: formResult.orderId || toPositiveInt(orderData?.orderId) };
-  }
-
-  const jsonResult = await tryRequest("POST json(action)", () =>
-    fetch(ORDERS_API_URL, {
-      method: "POST",
-      mode: "cors",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payloadData),
-    })
-  );
-
-  if (jsonResult.ok) {
-    return { ok: true, orderId: jsonResult.orderId || toPositiveInt(orderData?.orderId) };
-  }
-
-  const legacyFormResult = await tryRequest("POST form(legacy)", () =>
-    fetch(ORDERS_API_URL, {
-      method: "POST",
-      mode: "cors",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-      },
-      body: legacyFormPayload.toString(),
-    })
-  );
-
-  if (legacyFormResult.ok) {
-    return { ok: true, orderId: legacyFormResult.orderId || toPositiveInt(orderData?.orderId) };
-  }
-
-  const url = new URL(ORDERS_API_URL);
-  Object.entries(payloadData).forEach(([key, value]) => {
-    url.searchParams.set(key, value);
-  });
-
-  const getResult = await tryRequest("GET query(action)", () =>
-    fetch(url.toString(), {
-      method: "GET",
-      mode: "cors",
-    })
-  );
-
-  if (getResult.ok) {
-    return { ok: true, orderId: getResult.orderId || toPositiveInt(orderData?.orderId) };
-  }
-
-  throw new Error(`Order temporarily unavailable. Please call us directly. Technical: ${requestAttempts.join(" | ")}`);
-}
 
 const parseTrackPayload = (payload, requestedOrderId) => {
-  const candidates = [];
+  const candidates = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.items)
+      ? payload.items
+      : Array.isArray(payload?.orders)
+        ? payload.orders
+        : payload?.order
+          ? [payload.order]
+          : payload
+            ? [payload]
+            : [];
 
-  if (Array.isArray(payload)) {
-    candidates.push(...payload);
-  } else if (payload && typeof payload === "object") {
-    if (Array.isArray(payload.items)) {
-      candidates.push(...payload.items);
-    }
-    if (Array.isArray(payload.orders)) {
-      candidates.push(...payload.orders);
-    }
-    if (payload.order && typeof payload.order === "object") {
-      candidates.push(payload.order);
-    }
-    candidates.push(payload);
-  }
-
-  const normalized = candidates
-    .map((candidate) => normalizeTrackedOrder(candidate))
-    .filter(Boolean);
-
+  const normalized = candidates.map(normalizeTrackedOrder).filter(Boolean);
   if (!normalized.length) {
     return null;
   }
 
-  if (requestedOrderId !== undefined && requestedOrderId !== null && requestedOrderId !== "") {
-    return (
-      normalized.find((item) => Number(item.orderId) === Number(requestedOrderId)) || null
-    );
+  if (!requestedOrderId) {
+    return normalized[0];
   }
 
-  return normalized[0];
+  return (
+    normalized.find((entry) => Number(entry.orderId) === Number(requestedOrderId)) || null
+  );
 };
 
 export async function fetchOrderStatusFromSheet({ orderDateKey, orderId }) {
   if (!hasConfiguredValue(ORDERS_API_URL)) {
-    throw new Error("Set REACT_APP_ORDERS_API_URL in .env");
+    throw new Error("Tracking endpoint is not configured.");
   }
-
   if (!orderId) {
-    throw new Error("orderId is required");
+    throw new Error("orderId is required.");
   }
 
-  const actions = [TRACK_ORDER_ACTION, "track", "orderStatus"];
-  let lastError = "";
+  const actions = [TRACK_ORDER_ACTION, "trackOrder", "track", "orderStatus"];
 
   for (const action of actions) {
+    const url = new URL(ORDERS_API_URL);
+    url.searchParams.set("action", action);
+    url.searchParams.set("orderId", String(orderId));
+    url.searchParams.set("id", String(orderId));
+    if (orderDateKey) {
+      url.searchParams.set("orderDate", String(orderDateKey));
+      url.searchParams.set("date", String(orderDateKey));
+    }
+
     try {
-      const url = new URL(ORDERS_API_URL);
-      url.searchParams.set("action", action);
-      url.searchParams.set("orderId", String(orderId));
-      url.searchParams.set("id", String(orderId));
-      if (orderDateKey) {
-        url.searchParams.set("orderDate", orderDateKey);
-        url.searchParams.set("date", orderDateKey);
-      }
-
-      const response = await fetch(url.toString(), {
-        method: "GET",
-        mode: "cors",
-      });
-
-      if (!response.ok) {
-        lastError = `HTTP ${response.status}`;
-        continue;
-      }
-
-      const text = await response.text();
-      if (!text) {
-        continue;
-      }
-
-      let payload;
-      try {
-        payload = JSON.parse(text);
-      } catch {
-        continue;
-      }
-
+      const payload = await fetchJson(
+        url.toString(),
+        {
+          method: "GET",
+          headers: { Accept: "application/json" },
+        },
+        6000
+      );
       const parsed = parseTrackPayload(payload, orderId);
       if (parsed) {
         return parsed;
       }
-    } catch (error) {
-      lastError = error?.message || "Network/CORS error";
+    } catch {
+      // Try the next action variant.
     }
   }
 
-  throw new Error(lastError || "Unable to fetch order status");
+  throw new Error("Unable to fetch order status right now.");
 }

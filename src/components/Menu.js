@@ -1,25 +1,11 @@
-import { useState } from "react";
-import {
-  sortReviews,
-  getAvatarInitials,
-  getAvatarToneClass,
-  formatReviewDate,
-  getHelpfulCount,
-} from "../utils/reviews";
+import { useMemo, useState } from "react";
+import { sortReviews } from "../utils/reviews";
 
 const FALLBACK_IMAGE = "/menu-placeholder.svg";
-const STAR_FILLED = "\u2605";
-const STAR_EMPTY = "\u2606";
-const REVIEW_SORT_OPTIONS = [
-  { value: "top", label: "Top rated" },
-  { value: "helpful", label: "Most helpful" },
-  { value: "newest", label: "Newest first" },
-];
 
 function Menu({
-  snacks,
-  totalSnackCount,
-  menuStats,
+  items,
+  totalItems,
   searchQuery,
   onSearchChange,
   categories,
@@ -30,37 +16,35 @@ function Menu({
   isLoading,
   error,
   onRetry,
-  quickPickIds,
-  mostOrderedToday,
-  frequentlyBoughtTogether,
-  onAddBundle,
   itemRatings,
   reviews,
+  featuredItemIds,
+  popularItemIds,
   onOpenReviewModal,
 }) {
-  const [quantities, setQuantities] = useState({});
-  const [expandedReviews, setExpandedReviews] = useState({});
-  const [reviewSortBy, setReviewSortBy] = useState({});
+  const [openReviews, setOpenReviews] = useState({});
 
-  const getSelectedQty = (id) => quantities[id] || 1;
+  const featuredLookup = useMemo(
+    () => new Set((featuredItemIds || []).map((value) => String(value))),
+    [featuredItemIds]
+  );
+  const popularLookup = useMemo(
+    () => new Set((popularItemIds || []).map((value) => String(value))),
+    [popularItemIds]
+  );
 
   if (isLoading) {
     return (
-      <section className="panel">
-        <div className="panel-head">
-          <h2>Snack Menu</h2>
+      <section className="menu-shell">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Today&apos;s menu</p>
+            <h2>Fresh picks loading</h2>
+          </div>
         </div>
         <div className="menu-grid">
-          {Array.from({ length: 6 }).map((_, index) => (
-            <div className="menu-card skeleton" key={index}>
-              <div className="skeleton-image"></div>
-              <div className="menu-card-body">
-                <div className="skeleton-title"></div>
-                <div className="skeleton-text"></div>
-                <div className="skeleton-price"></div>
-                <div className="skeleton-button"></div>
-              </div>
-            </div>
+          {Array.from({ length: 8 }).map((_, index) => (
+            <div className="menu-skeleton" key={index} />
           ))}
         </div>
       </section>
@@ -69,330 +53,184 @@ function Menu({
 
   if (error) {
     return (
-      <section className="panel">
-        <div className="panel-head">
-          <h2>Snack Menu</h2>
+      <section className="menu-shell">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Today&apos;s menu</p>
+            <h2>Menu needs a quick refresh</h2>
+          </div>
         </div>
-        <div className="error-container">
-          <div className="error-icon">⚠️</div>
-          <h3 className="error-title">Menu Temporarily Unavailable</h3>
-          <p className="error-text">
-            We're having trouble loading the menu. This could be due to network issues or a temporary server problem. Please try again, or browse our fallback menu below.
-          </p>
-          <p className="error-detail" style={{ fontSize: "0.85rem", color: "#666", marginTop: "8px" }}>
-            Technical details: {error}
-          </p>
-          <button type="button" onClick={onRetry} className="retry-button">
-            🔄 Retry Loading
+        <div className="status-card">
+          <p>{error}</p>
+          <button type="button" className="primary-btn" onClick={onRetry}>
+            Retry menu
           </button>
-          <p className="fallback-notice" style={{ fontSize: "0.8rem", color: "#999", marginTop: "12px" }}>
-            Note: If the menu doesn't load, you'll see our fallback menu below.
-          </p>
         </div>
       </section>
     );
   }
 
   return (
-    <section className="panel">
-      <div className="panel-head">
-        <h2 id="snack-menu">Snack Menu</h2>
-        <span className="panel-label">
-          Showing {snacks.length} of {totalSnackCount} • Total: {menuStats.available} available, {menuStats.unavailable} unavailable
-        </span>
+    <section className="menu-shell" id="menu-section">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Today&apos;s menu</p>
+          <h2>Order fast, pick better, checkout with confidence.</h2>
+        </div>
+        <span className="section-meta">{totalItems} items available</span>
       </div>
 
-      <div className="menu-toolbar">
+      <div className="menu-tools">
         <label htmlFor="menu-search" className="sr-only">
           Search menu
         </label>
         <input
           id="menu-search"
-          className="search-input"
           type="search"
+          className="menu-search"
           value={searchQuery}
           onChange={(event) => onSearchChange(event.target.value)}
-          placeholder="Search snacks, drinks, meals..."
+          placeholder="Search pav bhaji, noodles, coffee..."
         />
-        <div className="category-tabs" role="tablist" aria-label="Menu categories">
+
+        <div className="category-row" aria-label="Menu categories">
           {categories.map((category) => (
             <button
               key={category}
               type="button"
-              role="tab"
-              aria-selected={category === activeCategory}
-              className={`category-tab ${category === activeCategory ? "active" : ""}`}
+              className={`category-chip ${activeCategory === category ? "is-active" : ""}`}
               onClick={() => onCategoryChange(category)}
             >
               {category}
             </button>
           ))}
         </div>
-        <p className="menu-tip">Tip: choose a Quick Pick for faster decisions.</p>
+
+        {!!searchQuery && (
+          <button type="button" className="link-btn reset-btn" onClick={onClearFilters}>
+            Clear search
+          </button>
+        )}
       </div>
 
-      {mostOrderedToday?.length ? (
-        <div className="popular-section">
-          <div className="popular-header">
-            <h3>Popular Items</h3>
-            <span className="popular-note">Most loved by customers</span>
-          </div>
-          <div className="popular-grid">
-            {mostOrderedToday.slice(0, 6).map((entry) => (
-              <div className="popular-item" key={entry.item.id}>
-                <img
-                  src={entry.item.image || FALLBACK_IMAGE}
-                  alt={entry.item.name}
-                  className="popular-image"
-                  onError={(event) => {
-                    event.currentTarget.onerror = null;
-                    event.currentTarget.src = FALLBACK_IMAGE;
-                  }}
-                />
-                <div className="popular-content">
-                  <h4>{entry.item.name}</h4>
-                  <div className="popular-meta">
-                    <span className="popular-price">Rs. {entry.item.price}</span>
-                    <span className="popular-orders">{entry.count} ordered today</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="popular-add-btn"
-                    onClick={() => {
-                      onAddToCart({
-                        ...entry.item,
-                        quantity: 1,
-                        unitPrice: Number(entry.item.price),
-                        price: Number(entry.item.price),
-                      });
-                    }}
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {frequentlyBoughtTogether?.length ? (
-        <div className="insight-panel">
-          <div className="insight-head">
-            <h3>Frequently Bought Together</h3>
-            <span className="insight-note">Save ordering time</span>
-          </div>
-          <div className="bundle-grid">
-            {frequentlyBoughtTogether.map((bundle) => (
-              <article className="bundle-card" key={bundle.id}>
-                <p className="bundle-title">
-                  {bundle.left.name} + {bundle.right.name}
-                </p>
-                <p className="bundle-meta">
-                  Rs. {bundle.totalPrice.toFixed(2)}
-                  {bundle.count
-                    ? ` | Ordered together ${bundle.count} times today`
-                    : " | Suggested combo"}
-                </p>
-                <button type="button" onClick={() => onAddBundle(bundle)}>
-                  Add Bundle
-                </button>
-              </article>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {!snacks.length ? (
-        <div className="empty-state">
-          <p className="muted-text">No items match your filters.</p>
-          <button type="button" className="secondary-btn" onClick={onClearFilters}>
-            Clear filters
+      {!items.length ? (
+        <div className="status-card">
+          <p>No items matched your search. Try another keyword or reset the filter.</p>
+          <button type="button" className="soft-btn" onClick={onClearFilters}>
+            Reset filters
           </button>
         </div>
       ) : (
         <div className="menu-grid">
-          {snacks.map((snack) => {
-            const itemReviews = reviews[snack.id] || [];
-            const reviewsOpen = Boolean(expandedReviews[snack.id]);
-            const selectedReviewSort = reviewSortBy[snack.id] || "top";
-            const sortedReviews = sortReviews(itemReviews, selectedReviewSort);
-            const topReviewId = sortedReviews[0]?.id;
-            const visibleReviews = sortedReviews.slice(0, 4);
-            const extraReviewCount = Math.max(0, itemReviews.length - visibleReviews.length);
+          {items.map((item, index) => {
+            const rating = itemRatings[item.id];
+            const itemReviews = sortReviews(reviews[item.id] || [], "top");
+            const leadReview = itemReviews[0];
+            const isFeatured = featuredLookup.has(String(item.id));
+            const isPopular = popularLookup.has(String(item.id));
+            const showReviews = !!openReviews[item.id];
 
             return (
-              <article className="menu-card" key={snack.id}>
-                {quickPickIds?.has(String(snack.id)) ? (
-                  <span className="quick-pick-badge">Quick Pick</span>
-                ) : null}
-                <img
-                  src={snack.image || FALLBACK_IMAGE}
-                  alt={snack.name}
-                  className="menu-image"
-                  loading="lazy"
-                  onError={(event) => {
-                    event.currentTarget.onerror = null;
-                    event.currentTarget.src = FALLBACK_IMAGE;
-                  }}
-                />
+              <article className="menu-card" key={item.id}>
+                <div className="menu-image-wrap">
+                  {(isFeatured || isPopular) && (
+                    <span className={`card-badge ${isFeatured ? "accent" : "warm"}`}>
+                      {isFeatured ? "Best seller" : "Popular"}
+                    </span>
+                  )}
+                  {index < 2 && <span className="veg-badge">Veg</span>}
+                  <img
+                    src={item.image || FALLBACK_IMAGE}
+                    alt={item.name}
+                    className="menu-image"
+                    loading={index < 4 ? "eager" : "lazy"}
+                    decoding="async"
+                    fetchPriority={index < 2 ? "high" : "low"}
+                    onError={(event) => {
+                      event.currentTarget.onerror = null;
+                      event.currentTarget.src = FALLBACK_IMAGE;
+                    }}
+                  />
+                </div>
+
                 <div className="menu-card-body">
-                  <div className="menu-header">
-                    <h3>{snack.name}</h3>
-                    <div className="veg-indicator">
-                      <span className="veg-icon">Veg</span>
+                  <div className="menu-card-top">
+                    <div>
+                      <h3>{item.name}</h3>
+                      <p>{item.description}</p>
                     </div>
+                    <strong className="price-pill">Rs. {Number(item.price).toFixed(0)}</strong>
                   </div>
-                  <p className="menu-description">
-                    {snack.description || "Fresh and delicious, prepared with the finest ingredients."}
-                  </p>
-                  <div className="menu-meta-row">
-                    <span className="price-badge">Rs. {snack.price}</span>
-                    {itemRatings[snack.id] ? (
-                      <div className="item-rating">
-                        <span className="stars">
-                          {STAR_FILLED.repeat(Math.floor(itemRatings[snack.id].rating))}
-                          {STAR_EMPTY.repeat(5 - Math.floor(itemRatings[snack.id].rating))}
-                        </span>
-                        <span className="rating-text">
-                          {itemRatings[snack.id].rating} ({itemRatings[snack.id].reviewCount})
-                        </span>
-                      </div>
-                    ) : null}
+
+                  <div className="menu-card-meta">
+                    <span>{item.category}</span>
+                    {rating?.reviewCount ? (
+                      <span>
+                        {rating.rating.toFixed(1)} / 5 • {rating.reviewCount} reviews
+                      </span>
+                    ) : (
+                      <span>Freshly prepared on order</span>
+                    )}
                   </div>
-                  <div className="menu-actions">
-                    <div className="qty-selector">
-                      <button
-                        type="button"
-                        className="qty-btn"
-                        onClick={() =>
-                          setQuantities((prev) => ({
-                            ...prev,
-                            [snack.id]: Math.max(1, getSelectedQty(snack.id) - 1),
-                          }))
-                        }
-                      >
-                        -
-                      </button>
-                      <span className="qty-display">{getSelectedQty(snack.id)}</span>
-                      <button
-                        type="button"
-                        className="qty-btn"
-                        onClick={() =>
-                          setQuantities((prev) => ({
-                            ...prev,
-                            [snack.id]: Math.min(10, getSelectedQty(snack.id) + 1),
-                          }))
-                        }
-                      >
-                        +
-                      </button>
-                    </div>
+
+                  <div className="menu-card-actions">
                     <button
                       type="button"
-                      className="add-to-cart-btn"
-                      onClick={() => {
-                        const qty = getSelectedQty(snack.id);
-                        const unitPrice = Number(snack.price);
-
-                        onAddToCart({
-                          ...snack,
-                          quantity: qty,
-                          unitPrice,
-                          price: unitPrice * qty,
-                        });
-                      }}
+                      className="primary-btn compact-btn"
+                      onClick={() => onAddToCart(item, 1)}
                     >
-                      <span className="btn-text">Add to Cart</span>
-                      <span className="btn-price">Rs. {Number(snack.price) * getSelectedQty(snack.id)}</span>
+                      Add to cart
+                    </button>
+                    <button
+                      type="button"
+                      className="soft-btn compact-btn"
+                      onClick={() => onAddToCart(item, 2)}
+                    >
+                      Add 2
                     </button>
                   </div>
-                  <button
-                    type="button"
-                    className="write-review-btn"
-                    onClick={() => onOpenReviewModal(snack)}
-                  >
-                    Write a Review
-                  </button>
-                  {itemReviews.length > 0 ? (
+
+                  {leadReview ? (
+                    <div className="review-snippet">
+                      <p className="review-snippet-title">Customer review</p>
+                      <blockquote>&quot;{leadReview.comment}&quot;</blockquote>
+                      <p className="review-snippet-meta">
+                        {leadReview.name} • {leadReview.rating}/5
+                      </p>
+                    </div>
+                  ) : null}
+
+                  <div className="menu-card-footer">
                     <button
                       type="button"
-                      className={`review-toggle-btn ${reviewsOpen ? "active" : ""}`}
+                      className="link-btn"
                       onClick={() =>
-                        setExpandedReviews((prev) => ({
-                          ...prev,
-                          [snack.id]: !prev[snack.id],
+                        setOpenReviews((previous) => ({
+                          ...previous,
+                          [item.id]: !previous[item.id],
                         }))
                       }
-                      aria-expanded={reviewsOpen}
                     >
-                      {reviewsOpen ? "Hide Reviews" : `Reviews (${itemReviews.length})`}
+                      {showReviews ? "Hide reviews" : `View reviews (${itemReviews.length})`}
                     </button>
-                  ) : null}
-                  {itemReviews.length > 0 && reviewsOpen ? (
-                    <div className="reviews-section">
-                      <div className="review-head-row">
-                        <h4>Customer Reviews ({itemReviews.length})</h4>
-                        <label className="review-sort-wrap">
-                          <span>Sort</span>
-                          <select
-                            className="review-sort-select"
-                            value={selectedReviewSort}
-                            onChange={(event) =>
-                              setReviewSortBy((prev) => ({
-                                ...prev,
-                                [snack.id]: event.target.value,
-                              }))
-                            }
-                            aria-label={`Sort reviews for ${snack.name}`}
-                          >
-                            {REVIEW_SORT_OPTIONS.map((sortOption) => (
-                              <option key={sortOption.value} value={sortOption.value}>
-                                {sortOption.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      </div>
-                      <div className="reviews-list">
-                        {visibleReviews.map((review) => (
-                          <div
-                            key={review.id}
-                            className={`review-item ${review.id === topReviewId ? "top-review" : ""}`}
-                          >
-                            <div className="review-header">
-                              <div className="review-author-block">
-                                <div className={`review-avatar ${getAvatarToneClass(review.name)}`}>
-                                  {getAvatarInitials(review.name)}
-                                </div>
-                                <div className="review-author-meta">
-                                  <div className="review-author-row">
-                                    <span className="review-author">{review.name || "Anonymous"}</span>
-                                    {review.id === topReviewId ? (
-                                      <span className="top-review-badge">Top Review</span>
-                                    ) : null}
-                                  </div>
-                                  <div className="review-rating">
-                                    <span className="review-stars">
-                                      {STAR_FILLED.repeat(Number(review.rating || 0))}
-                                      {STAR_EMPTY.repeat(5 - Number(review.rating || 0))}
-                                    </span>
-                                    <span className="review-date">{formatReviewDate(review.date)}</span>
-                                  </div>
-                                </div>
-                              </div>
-                              <span className="review-helpful">{getHelpfulCount(review)} helpful</span>
-                            </div>
-                            <p className="review-comment">{review.comment}</p>
-                          </div>
-                        ))}
-                        {extraReviewCount > 0 ? (
-                          <p className="more-reviews">
-                            +{extraReviewCount} more review
-                            {extraReviewCount !== 1 ? "s" : ""}
-                          </p>
-                        ) : null}
-                      </div>
+                    <button
+                      type="button"
+                      className="link-btn"
+                      onClick={() => onOpenReviewModal(item)}
+                    >
+                      Write a review
+                    </button>
+                  </div>
+
+                  {showReviews && itemReviews.length > 0 ? (
+                    <div className="review-list">
+                      {itemReviews.slice(0, 3).map((review) => (
+                        <div className="review-card" key={review.id}>
+                          <strong>{review.name}</strong>
+                          <span>{review.rating}/5</span>
+                          <p>{review.comment}</p>
+                        </div>
+                      ))}
                     </div>
                   ) : null}
                 </div>
