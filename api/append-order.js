@@ -2,7 +2,7 @@ const ORDER_POST_ACTION = process.env.ORDER_POST_ACTION || "appendOrder";
 const ORDERS_API_URL = String(
   process.env.ORDERS_API_URL ||
     process.env.REACT_APP_ORDERS_API_URL ||
-    "https://script.google.com/macros/s/AKfycbzryN3AnMCu3m2QDT4DerbFepEL2dZuGCynXVzF8QPQ_0NUyoMDJ18GpazFRVs-lFfG4w/exec"
+    "https://script.google.com/macros/s/AKfycbweIgYCyssQwOIBJ8UlldadgVw_79YOgrvHeXzyZcPdf5ffA1uW3p4sDRhNn3AGwnQXlg/exec"
 ).trim();
 
 const parseBody = (body) => {

@@ -45,14 +45,16 @@ module.exports = async (req, res) => {
     },
   };
 
-  // Test upstream connectivity
+  // Test upstream connectivity against the same action used by /api/menu.
   if (ORDERS_API_URL && !ORDERS_API_URL.startsWith("YOUR_")) {
     try {
       const startTime = Date.now();
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const upstreamUrl = new URL(ORDERS_API_URL);
+      upstreamUrl.searchParams.set("action", "menu");
 
-      const response = await fetch(ORDERS_API_URL + "?action=health", {
+      const response = await fetch(upstreamUrl.toString(), {
         method: "GET",
         signal: controller.signal,
         headers: {

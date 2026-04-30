@@ -37,30 +37,18 @@ const STABLE_MENU_IMAGE_BY_NAME = {
     "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=800&q=80",
 };
 
-export const FALLBACK_MENU_DATA = [
-  { id: "fallback-1", name: "Vada Pav", price: 40, category: "Snacks", active: true },
-  { id: "fallback-2", name: "Cheese Vada Pav", price: 50, category: "Snacks", active: true },
-  { id: "fallback-3", name: "Club Sandwich", price: 30, category: "Snacks", active: true },
-  { id: "fallback-4", name: "Dosa", price: 70, category: "Breakfast", active: true },
-  { id: "fallback-5", name: "Tea", price: 20, category: "Beverages", active: true },
-  { id: "fallback-6", name: "Veg Noodles Full", price: 70, category: "Meals", active: true },
-].map((item, index) => ({
-  ...item,
-  image: normalizeImageUrl(item.image, item.name),
-  id: item.id || `fallback-${index + 1}`,
-}));
-
 const hasConfiguredValue = (value) =>
   typeof value === "string" &&
   value.trim() !== "" &&
   !value.startsWith("YOUR_") &&
   !value.includes("<");
 
-const normalizeNameKey = (value) =>
-  String(value || "")
+function normalizeNameKey(value) {
+  return String(value || "")
     .trim()
     .toLowerCase()
     .replace(/\s+/g, " ");
+}
 
 function normalizeImageUrl(value, name) {
   const raw = String(value || "").trim();
@@ -83,6 +71,19 @@ function normalizeImageUrl(value, name) {
     return STABLE_MENU_IMAGE_BY_NAME[normalizeNameKey(name)] || DEFAULT_MENU_IMAGE;
   }
 }
+
+export const FALLBACK_MENU_DATA = [
+  { id: "fallback-1", name: "Vada Pav", price: 40, category: "Snacks", active: true },
+  { id: "fallback-2", name: "Cheese Vada Pav", price: 50, category: "Snacks", active: true },
+  { id: "fallback-3", name: "Club Sandwich", price: 30, category: "Snacks", active: true },
+  { id: "fallback-4", name: "Dosa", price: 70, category: "Breakfast", active: true },
+  { id: "fallback-5", name: "Tea", price: 20, category: "Beverages", active: true },
+  { id: "fallback-6", name: "Veg Noodles Full", price: 70, category: "Meals", active: true },
+].map((item, index) => ({
+  ...item,
+  image: normalizeImageUrl(item?.image, item?.name),
+  id: item?.id || `fallback-${index + 1}`,
+}));
 
 const toBoolean = (value) => {
   if (typeof value === "boolean") {
