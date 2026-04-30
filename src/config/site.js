@@ -5,6 +5,9 @@ const DISPLAY_PHONE =
     ? `+91 ${SANITIZED_PHONE.slice(0, 5)} ${SANITIZED_PHONE.slice(5)}`
     : BUSINESS_PHONE;
 
+// WhatsApp Catalog link (no pre-filled message)
+export const WHATSAPP_CATALOG_LINK = `https://wa.me/c/91${SANITIZED_PHONE}`;
+
 export const SITE_CONTENT = {
   name: "Anupama Canteen",
   city: "Lucknow",
@@ -13,9 +16,7 @@ export const SITE_CONTENT = {
   phone: SANITIZED_PHONE,
   displayPhone: DISPLAY_PHONE,
   callLink: `tel:+91${SANITIZED_PHONE}`,
-  whatsappLink: `https://wa.me/91${SANITIZED_PHONE}?text=${encodeURIComponent(
-    "Hi Anupama Canteen, I want to place an order."
-  )}`,
+  whatsappLink: WHATSAPP_CATALOG_LINK,
   fssaiNumber: process.env.REACT_APP_FSSAI_NUMBER || "22726739000468",
   address:
     process.env.REACT_APP_BUSINESS_ADDRESS ||
@@ -54,15 +55,6 @@ export const createWhatsAppOrderLink = ({
   total,
   items,
 } = {}) => {
-  const details = [
-    "Hi Anupama Canteen, I need help with my order.",
-    orderId ? `Order ID: ${orderId}` : "",
-    customerName ? `Name: ${customerName}` : "",
-    total ? `Total: Rs. ${Number(total).toFixed(2)}` : "",
-    items ? `Items: ${items}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  return `https://wa.me/91${SANITIZED_PHONE}?text=${encodeURIComponent(details)}`;
+  // Use catalog link for ordering - no pre-filled message
+  return WHATSAPP_CATALOG_LINK;
 };

@@ -941,3 +941,63 @@ textarea {
     border-radius: 22px;
   }
 }
+
+/* Floating WhatsApp Order Button */
+.floating-whatsapp-btn {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 24px;
+  background: #25d366;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 50px;
+  box-shadow: 0 4px 20px rgba(37, 211, 102, 0.4);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.floating-whatsapp-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 28px rgba(37, 211, 102, 0.5);
+}
+
+.floating-whatsapp-btn:active {
+  transform: translateY(0);
+}
+
+.floating-whatsapp-btn svg {
+  flex-shrink: 0;
+}
+
+.floating-whatsapp-subtext {
+  position: fixed;
+  right: 20px;
+  bottom: 8px;
+  z-index: 100;
+  margin: 0;
+  padding: 0 24px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+}
+
+@media (max-width: 480px) {
+  .floating-whatsapp-btn {
+    right: 16px;
+    bottom: 16px;
+    padding: 12px 20px;
+    font-size: 14px;
+  }
+
+  .floating-whatsapp-subtext {
+    right: 16px;
+    bottom: 6px;
+    font-size: 10px;
+  }
+}
