@@ -21,7 +21,7 @@ function Confirmation({
     return null;
   }
 
-  const upiId = String(process.env.REACT_APP_UPI_ID || "9807980222@ptsbi")
+  const upiId = String(process.env.REACT_APP_UPI_ID || "9838383231@ptsbi")
     .trim()
     .toLowerCase();
   const payeeName = process.env.REACT_APP_UPI_PAYEE_NAME || "Utkarsh Shukla";

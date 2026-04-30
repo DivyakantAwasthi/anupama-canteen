@@ -1,20 +1,37 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" role="img" aria-label="Snack placeholder">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" role="img" aria-label="Anupama Canteen food illustration">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#dcfce7"/>
-      <stop offset="100%" stop-color="#d1fae5"/>
+      <stop offset="0%" stop-color="#fff3e6"/>
+      <stop offset="55%" stop-color="#ffe8d6"/>
+      <stop offset="100%" stop-color="#f3fff4"/>
     </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
     <linearGradient id="plate" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="100%" stop-color="#ecfdf5"/>
+      <stop offset="100%" stop-color="#fffaf4"/>
     </linearGradient>
   </defs>
-  <rect width="800" height="600" fill="url(#bg)"/>
-  <ellipse cx="400" cy="360" rx="220" ry="78" fill="url(#plate)" stroke="#a7f3d0" stroke-width="8"/>
-  <path d="M245 310c28-65 87-115 155-115s127 50 155 115" fill="none" stroke="#047857" stroke-width="18" stroke-linecap="round"/>
-  <circle cx="310" cy="305" r="22" fill="#f59e0b"/>
-  <circle cx="390" cy="282" r="20" fill="#ef4444"/>
-  <circle cx="470" cy="300" r="24" fill="#10b981"/>
-  <text x="400" y="475" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="44" fill="#065f46" font-weight="700">Anupama Canteen</text>
-  <text x="400" y="518" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="28" fill="#047857">Fresh snack image coming soon</text>
+  <rect width="1200" height="900" fill="url(#bg)"/>
+  <circle cx="920" cy="180" r="220" fill="url(#glow)"/>
+  <circle cx="240" cy="720" r="180" fill="#ffffff" opacity="0.35"/>
+  <ellipse cx="610" cy="625" rx="305" ry="105" fill="#d7c5b6" opacity="0.28"/>
+  <ellipse cx="600" cy="585" rx="310" ry="118" fill="url(#plate)" stroke="#f0d6bf" stroke-width="12"/>
+  <ellipse cx="600" cy="580" rx="240" ry="86" fill="#fffdf9"/>
+  <g transform="translate(410 420)">
+    <circle cx="0" cy="0" r="74" fill="#d97706"/>
+    <circle cx="172" cy="34" r="78" fill="#ea580c"/>
+    <circle cx="348" cy="-8" r="72" fill="#16a34a"/>
+    <circle cx="86" cy="126" r="66" fill="#ef4444"/>
+    <circle cx="264" cy="138" r="68" fill="#f59e0b"/>
+    <circle cx="438" cy="108" r="62" fill="#15803d"/>
+  </g>
+  <path d="M415 425c28-82 96-142 184-142s158 60 186 142" fill="none" stroke="#9a3412" stroke-width="18" stroke-linecap="round"/>
+  <path d="M545 300c-11-26-7-54 14-81" fill="none" stroke="#ffffff" stroke-opacity="0.72" stroke-width="9" stroke-linecap="round"/>
+  <path d="M608 278c-9-21-4-46 16-70" fill="none" stroke="#ffffff" stroke-opacity="0.72" stroke-width="9" stroke-linecap="round"/>
+  <path d="M676 300c-10-24-6-51 14-76" fill="none" stroke="#ffffff" stroke-opacity="0.72" stroke-width="9" stroke-linecap="round"/>
+  <text x="600" y="770" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="54" fill="#7c2d12" font-weight="700">Anupama Canteen</text>
+  <text x="600" y="822" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="28" fill="#166534">Freshly prepared snacks, meals, and chai favourites</text>
 </svg>

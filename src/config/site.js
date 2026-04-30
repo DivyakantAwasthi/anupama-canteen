@@ -1,4 +1,4 @@
-const BUSINESS_PHONE = process.env.REACT_APP_BUSINESS_PHONE || "9807980222";
+const BUSINESS_PHONE = process.env.REACT_APP_BUSINESS_PHONE || "9838383231";
 const SANITIZED_PHONE = BUSINESS_PHONE.replace(/\D/g, "");
 const DISPLAY_PHONE =
   SANITIZED_PHONE.length === 10
@@ -16,14 +16,16 @@ export const SITE_CONTENT = {
   whatsappLink: `https://wa.me/91${SANITIZED_PHONE}?text=${encodeURIComponent(
     "Hi Anupama Canteen, I want to place an order."
   )}`,
-  fssaiNumber: process.env.REACT_APP_FSSAI_NUMBER || "FSSAI details available on request",
+  fssaiNumber: process.env.REACT_APP_FSSAI_NUMBER || "22726739000468",
   address:
     process.env.REACT_APP_BUSINESS_ADDRESS ||
-    "Anupama Canteen, Lucknow, Uttar Pradesh",
+    "Anupama Canteen, Ghaila Road, Lucknow",
   since: "2010",
   heroHeading: "Fresh snacks in Lucknow, ready fast and packed with care.",
   heroSubheading:
     "Order pav bhaji, sandwiches, maggi, dosa, tea, and quick meals from a cleaner, faster local ordering experience.",
+  heroImage: "/images/cheese-vada-pav.jpg",
+  heroImageFallback: "/menu-placeholder.svg",
   primaryCta: "Start Your Order",
   secondaryCta: "Browse Menu",
   deliveryMessage: "Fast pickup and local delivery support",

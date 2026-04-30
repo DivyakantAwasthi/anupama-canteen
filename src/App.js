@@ -104,6 +104,10 @@ const getOrderCounterKey = (dateKey) => `${ORDER_COUNTER_PREFIX}${dateKey}`;
 const getWhatsAppSentKey = (orderDateKey, orderId, status) =>
   `${WHATSAPP_SENT_PREFIX}${orderDateKey}:${orderId}:${status}`;
 
+function FooterInfoIcon({ children }) {
+  return <span className="footer-icon" aria-hidden="true">{children}</span>;
+}
+
 const readOrdersForDate = (dateKey) => {
   try {
     const raw = localStorage.getItem(getOrderStorageKey(dateKey));
@@ -194,6 +198,7 @@ const inferLocalOrderStatus = (order) => {
 };
 
 function App() {
+  const [heroImageSrc, setHeroImageSrc] = useState(SITE_CONTENT.heroImage);
   const [menuItems, setMenuItems] = useState(() => readCachedMenuItems());
   const [isMenuLoading, setIsMenuLoading] = useState(() => readCachedMenuItems().length === 0);
   const [menuError, setMenuError] = useState("");
@@ -831,7 +836,7 @@ function App() {
       <main className="page-shell">
         <section className="hero">
           <div className="hero-copy">
-            <p className="eyebrow">Snacks in Lucknow • Serving Since {SITE_CONTENT.since}</p>
+            <p className="eyebrow">Snacks in Lucknow | Serving Since {SITE_CONTENT.since}</p>
             <h2>{SITE_CONTENT.heroHeading}</h2>
             <p>{SITE_CONTENT.heroSubheading}</p>
 
@@ -869,7 +874,7 @@ function App() {
             </div>
           </div>
 
-          <div className="hero-card">
+            <div className="hero-card">
             <div className="hero-card-top">
               <p>Trusted local ordering</p>
               <strong>{SITE_CONTENT.city}</strong>
@@ -889,7 +894,15 @@ function App() {
               </li>
             </ul>
             <div className="hero-preview">
-              <img src="/menu-placeholder.svg" alt="Fresh food preview" />
+              <img
+                src={heroImageSrc}
+                alt="Fresh cheese vada pav served by Anupama Canteen"
+                onError={() => setHeroImageSrc(SITE_CONTENT.heroImageFallback)}
+              />
+              <div className="hero-preview-overlay">
+                <span>Freshly prepared</span>
+                <strong>Lucknow quick bites, packed with care</strong>
+              </div>
             </div>
           </div>
         </section>
@@ -1039,6 +1052,57 @@ function App() {
           </aside>
         </div>
       </main>
+
+      <footer className="site-footer">
+        <div className="site-footer-inner">
+          <div className="site-footer-brand">
+            <p className="eyebrow">Serving since {SITE_CONTENT.since}</p>
+            <h2>{SITE_CONTENT.name}</h2>
+            <p>
+              Fresh snacks, tea-time favourites, and quick meals for Lucknow customers who
+              want fast ordering with real local trust.
+            </p>
+          </div>
+
+          <div className="site-footer-grid">
+            <div className="footer-detail-card">
+              <FooterInfoIcon>📍</FooterInfoIcon>
+              <div>
+                <span>Address</span>
+                <strong>{SITE_CONTENT.address}</strong>
+              </div>
+            </div>
+            <div className="footer-detail-card">
+              <FooterInfoIcon>📞</FooterInfoIcon>
+              <div>
+                <span>Phone</span>
+                <strong>{SITE_CONTENT.displayPhone}</strong>
+              </div>
+            </div>
+            <div className="footer-detail-card">
+              <FooterInfoIcon>🛡</FooterInfoIcon>
+              <div>
+                <span>FSSAI Number</span>
+                <strong>{SITE_CONTENT.fssaiNumber}</strong>
+              </div>
+            </div>
+          </div>
+
+          <div className="site-footer-actions">
+            <a href={SITE_CONTENT.callLink} className="soft-btn">
+              Call now
+            </a>
+            <a
+              href={SITE_CONTENT.whatsappLink}
+              target="_blank"
+              rel="noreferrer"
+              className="primary-btn"
+            >
+              WhatsApp order
+            </a>
+          </div>
+        </div>
+      </footer>
 
       <button
         type="button"

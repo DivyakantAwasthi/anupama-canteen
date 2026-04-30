@@ -265,6 +265,7 @@ textarea {
 }
 
 .hero-preview {
+  position: relative;
   border-radius: 22px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.14);
@@ -275,6 +276,31 @@ textarea {
   width: 100%;
   aspect-ratio: 4 / 3;
   object-fit: cover;
+}
+
+.hero-preview-overlay {
+  position: absolute;
+  inset: auto 16px 16px 16px;
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(32, 21, 15, 0.2), rgba(32, 21, 15, 0.74));
+  color: #fff;
+  backdrop-filter: blur(10px);
+}
+
+.hero-preview-overlay span {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.88;
+}
+
+.hero-preview-overlay strong {
+  font-size: 1rem;
+  line-height: 1.35;
 }
 
 .trust-grid {
@@ -661,6 +687,83 @@ textarea {
   padding: 40px 0;
 }
 
+.site-footer {
+  padding: 0 0 96px;
+}
+
+.site-footer-inner {
+  width: min(var(--max-width), calc(100vw - 32px));
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1.1fr 1.2fr auto;
+  gap: 20px;
+  align-items: start;
+  padding: 26px 28px;
+  border-radius: var(--radius-xl);
+  background:
+    radial-gradient(circle at top right, rgba(255, 203, 164, 0.34), transparent 28%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(255, 245, 236, 0.96));
+  border: 1px solid rgba(194, 65, 12, 0.1);
+  box-shadow: var(--shadow);
+}
+
+.site-footer-brand h2 {
+  margin: 0 0 8px;
+  font-family: "Trebuchet MS", "Aptos Display", sans-serif;
+  letter-spacing: -0.03em;
+}
+
+.site-footer-brand p:not(.eyebrow) {
+  margin: 0;
+  max-width: 44ch;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.site-footer-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.footer-detail-card {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--line);
+}
+
+.footer-detail-card span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.footer-detail-card strong {
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.footer-icon {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: var(--brand-soft);
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.site-footer-actions {
+  display: grid;
+  gap: 10px;
+}
+
 .confirmation-card h1 {
   font-size: clamp(2rem, 4vw, 3.2rem);
 }
@@ -786,7 +889,8 @@ textarea {
   .info-band,
   .content-grid,
   .confirmation-grid,
-  .trust-grid {
+  .trust-grid,
+  .site-footer-inner {
     grid-template-columns: 1fr;
   }
 
@@ -799,7 +903,8 @@ textarea {
   .topbar-row,
   .hero-stats,
   .menu-grid,
-  .info-band-grid {
+  .info-band-grid,
+  .site-footer-grid {
     grid-template-columns: 1fr;
   }
 
@@ -818,6 +923,7 @@ textarea {
   .topbar-actions a,
   .hero-actions button,
   .hero-actions a,
+  .site-footer-actions a,
   .modal-actions a,
   .modal-actions button {
     flex: 1 1 100%;
