@@ -7,6 +7,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { FiMapPin, FiPhoneCall, FiShield } from "react-icons/fi";
 import Menu from "./components/Menu";
 import Cart from "./components/Cart";
 import {
@@ -103,10 +104,6 @@ const getOrderStorageKey = (dateKey) => `${ORDER_STORAGE_PREFIX}${dateKey}`;
 const getOrderCounterKey = (dateKey) => `${ORDER_COUNTER_PREFIX}${dateKey}`;
 const getWhatsAppSentKey = (orderDateKey, orderId, status) =>
   `${WHATSAPP_SENT_PREFIX}${orderDateKey}:${orderId}:${status}`;
-
-function FooterInfoIcon({ children }) {
-  return <span className="footer-icon" aria-hidden="true">{children}</span>;
-}
 
 const readOrdersForDate = (dateKey) => {
   try {
@@ -925,31 +922,6 @@ function App() {
           ))}
         </section>
 
-        <section className="info-band">
-          <div className="info-band-copy">
-            <p className="eyebrow">Local business details</p>
-            <h2>Built to convert more first-time visitors into confident orders.</h2>
-          </div>
-          <div className="info-band-grid">
-            <div>
-              <span>Phone</span>
-              <strong>{SITE_CONTENT.displayPhone}</strong>
-            </div>
-            <div>
-              <span>Address</span>
-              <strong>{SITE_CONTENT.address}</strong>
-            </div>
-            <div>
-              <span>FSSAI</span>
-              <strong>{SITE_CONTENT.fssaiNumber}</strong>
-            </div>
-            <div>
-              <span>Service area</span>
-              <strong>{SITE_CONTENT.serviceArea}</strong>
-            </div>
-          </div>
-        </section>
-
         <div className="content-grid">
           <div className="content-main">
             <Menu
@@ -1066,21 +1038,27 @@ function App() {
 
           <div className="site-footer-grid">
             <div className="footer-detail-card">
-              <FooterInfoIcon>📍</FooterInfoIcon>
+              <span className="footer-icon" aria-hidden="true">
+                <FiMapPin />
+              </span>
               <div>
                 <span>Address</span>
                 <strong>{SITE_CONTENT.address}</strong>
               </div>
             </div>
             <div className="footer-detail-card">
-              <FooterInfoIcon>📞</FooterInfoIcon>
+              <span className="footer-icon" aria-hidden="true">
+                <FiPhoneCall />
+              </span>
               <div>
                 <span>Phone</span>
                 <strong>{SITE_CONTENT.displayPhone}</strong>
               </div>
             </div>
             <div className="footer-detail-card">
-              <FooterInfoIcon>🛡</FooterInfoIcon>
+              <span className="footer-icon" aria-hidden="true">
+                <FiShield />
+              </span>
               <div>
                 <span>FSSAI Number</span>
                 <strong>{SITE_CONTENT.fssaiNumber}</strong>

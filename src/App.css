@@ -164,7 +164,6 @@ textarea {
 .hero-copy,
 .hero-card,
 .trust-card,
-.info-band,
 .menu-shell,
 .cart-shell,
 .side-panel,
@@ -311,7 +310,6 @@ textarea {
 }
 
 .trust-card,
-.info-band,
 .menu-shell,
 .cart-shell,
 .side-panel,
@@ -324,7 +322,6 @@ textarea {
 }
 
 .trust-card p:not(.eyebrow),
-.info-band strong,
 .inline-error,
 .status-card,
 .cart-item p,
@@ -337,27 +334,6 @@ textarea {
   color: var(--muted);
 }
 
-.info-band {
-  display: grid;
-  grid-template-columns: 0.95fr 1.05fr;
-  gap: 18px;
-  margin-bottom: 24px;
-}
-
-.info-band-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 14px;
-}
-
-.info-band-grid div {
-  padding: 16px;
-  border-radius: var(--radius-md);
-  background: var(--surface-strong);
-  border: 1px solid var(--line);
-}
-
-.info-band-grid span,
 .cart-summary-label {
   display: block;
   margin-bottom: 4px;
@@ -688,6 +664,7 @@ textarea {
 }
 
 .site-footer {
+  border-top: 1px solid rgba(194, 65, 12, 0.08);
   padding: 0 0 96px;
 }
 
@@ -695,7 +672,7 @@ textarea {
   width: min(var(--max-width), calc(100vw - 32px));
   margin: 0 auto;
   display: grid;
-  grid-template-columns: 1.1fr 1.2fr auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
   gap: 20px;
   align-items: start;
   padding: 26px 28px;
@@ -728,6 +705,7 @@ textarea {
 
 .footer-detail-card {
   display: flex;
+  align-items: flex-start;
   gap: 12px;
   padding: 16px;
   border-radius: var(--radius-md);
@@ -755,13 +733,15 @@ textarea {
   justify-content: center;
   border-radius: 12px;
   background: var(--brand-soft);
-  font-size: 1.1rem;
+  color: var(--brand-strong);
+  font-size: 1.15rem;
   flex-shrink: 0;
 }
 
 .site-footer-actions {
   display: grid;
   gap: 10px;
+  align-self: center;
 }
 
 .confirmation-card h1 {
@@ -886,7 +866,6 @@ textarea {
 
 @media (max-width: 1080px) {
   .hero,
-  .info-band,
   .content-grid,
   .confirmation-grid,
   .trust-grid,
@@ -903,7 +882,6 @@ textarea {
   .topbar-row,
   .hero-stats,
   .menu-grid,
-  .info-band-grid,
   .site-footer-grid {
     grid-template-columns: 1fr;
   }
@@ -954,7 +932,6 @@ textarea {
   .hero-copy,
   .hero-card,
   .trust-card,
-  .info-band,
   .menu-shell,
   .cart-shell,
   .side-panel,
