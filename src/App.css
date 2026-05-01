@@ -792,6 +792,39 @@ textarea {
   padding: 24px;
 }
 
+.payment-confirm-modal h3 {
+  margin: 0 0 12px;
+  font-size: 1.25rem;
+}
+
+.payment-confirm-modal p {
+  margin: 0 0 20px;
+  color: var(--muted);
+}
+
+.payment-instruction {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  background: var(--brand-soft);
+  border-radius: var(--radius-md);
+  color: var(--brand-strong);
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.track-customer {
+  font-weight: 400;
+  font-size: 0.9em;
+  color: var(--muted);
+}
+
+.track-items {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
 .modal-head {
   display: flex;
   align-items: flex-start;
@@ -814,7 +847,7 @@ textarea {
   left: 50%;
   bottom: 14px;
   transform: translateX(-50%);
-  z-index: 18;
+  z-index: 100;
   display: none;
   align-items: center;
   justify-content: space-between;
@@ -946,8 +979,8 @@ textarea {
 .floating-whatsapp-btn {
   position: fixed;
   right: 20px;
-  bottom: 20px;
-  z-index: 100;
+  bottom: 90px;
+  z-index: 150;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -978,8 +1011,8 @@ textarea {
 .floating-whatsapp-subtext {
   position: fixed;
   right: 20px;
-  bottom: 8px;
-  z-index: 100;
+  bottom: 74px;
+  z-index: 150;
   margin: 0;
   padding: 0 24px 0 0;
   font-size: 11px;

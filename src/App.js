@@ -610,7 +610,7 @@ function App() {
     upsertOrderForDate(dateKey, nextOrder);
     setTodayOrders(readOrdersForDate(dateKey));
     setOrderDetails(nextOrder);
-    setCartItems([]);
+    // Cart is NOT cleared here - only cleared after payment confirmation
     setIsCheckoutOpen(false);
     setCheckoutError("");
   };
@@ -656,6 +656,8 @@ function App() {
 
       setOrderDetails(nextOrder);
       setTodayOrders(readOrdersForDate(orderDetails.orderDateKey));
+      // Clear cart only after payment is confirmed
+      setCartItems([]);
     } catch (error) {
       setOrderDetails((previous) => ({
         ...previous,
@@ -990,9 +992,15 @@ function App() {
                 <div className="status-card">
                   <p>
                     <strong>Order #{trackedOrder.orderId}</strong>
+                    {trackedOrder.customer?.name && (
+                      <span className="track-customer"> • {trackedOrder.customer.name}</span>
+                    )}
                   </p>
                   <p>Status: {STATUS_COPY[trackedOrder.status] || trackedOrder.status}</p>
                   <p>Total: Rs. {Number(trackedOrder.total || 0).toFixed(2)}</p>
+                  {trackedOrder.items && (
+                    <p className="track-items">Items: {trackedOrder.items}</p>
+                  )}
                 </div>
               ) : null}
             </section>

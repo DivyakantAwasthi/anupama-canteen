@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { QRCodeCanvas } from "qrcode.react";
 import { createWhatsAppOrderLink } from "../config/site";
 
@@ -17,6 +18,8 @@ function Confirmation({
   onNewOrder,
   business,
 }) {
+  const [showPaymentConfirm, setShowPaymentConfirm] = useState(false);
+
   if (!order) {
     return null;
   }
@@ -76,6 +79,9 @@ function Confirmation({
                   <QRCodeCanvas value={upiLink} size={200} includeMargin />
                 </div>
                 <p className="muted-copy">Scan to pay via UPI</p>
+                <p className="payment-instruction">
+                  Please complete payment and then click "I have paid"
+                </p>
                 <div className="confirmation-actions">
                   <a href={upiLink} className="primary-btn">
                     Open UPI app
@@ -83,7 +89,7 @@ function Confirmation({
                   <button
                     type="button"
                     className="soft-btn"
-                    onClick={onConfirmPayment}
+                    onClick={() => setShowPaymentConfirm(true)}
                     disabled={order.saving}
                   >
                     {order.saving ? "Confirming..." : "I have paid"}
@@ -114,6 +120,34 @@ function Confirmation({
             ) : null}
           </div>
         </div>
+
+        {showPaymentConfirm && (
+          <div className="modal-backdrop" role="dialog" aria-modal="true">
+            <div className="modal-sheet payment-confirm-modal">
+              <h3>Confirm Payment</h3>
+              <p>Are you sure payment is completed?</p>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="soft-btn"
+                  onClick={() => setShowPaymentConfirm(false)}
+                >
+                  Not yet
+                </button>
+                <button
+                  type="button"
+                  className="primary-btn"
+                  onClick={() => {
+                    setShowPaymentConfirm(false);
+                    onConfirmPayment();
+                  }}
+                >
+                  Yes, I paid
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {order.error ? <p className="inline-error">{order.error}</p> : null}
 

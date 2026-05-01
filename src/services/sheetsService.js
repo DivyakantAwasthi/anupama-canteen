@@ -523,8 +523,12 @@ const normalizeStatus = (value) => {
 };
 
 const normalizeTrackedOrder = (rawOrder) => {
+  if (!rawOrder || typeof rawOrder !== "object") {
+    return null;
+  }
+
   const orderId = toPositiveInt(
-    pickField(rawOrder, ["orderId", "Order ID", "id", "OrderId"], null)
+    pickField(rawOrder, ["orderId", "Order ID", "id", "OrderId", "order_id"], null)
   );
   if (!orderId) {
     return null;
@@ -532,30 +536,45 @@ const normalizeTrackedOrder = (rawOrder) => {
 
   return {
     orderId,
-    orderDateKey: String(pickField(rawOrder, ["orderDate", "Date", "date"], "") || ""),
-    total: Number(pickField(rawOrder, ["total", "Total", "amount"], 0)) || 0,
-    items: String(pickField(rawOrder, ["items", "Items"], "") || ""),
+    orderDateKey: String(pickField(rawOrder, ["orderDate", "Date", "date", "order_date"], "") || ""),
+    total: Number(pickField(rawOrder, ["total", "Total", "amount", "Amount"], 0)) || 0,
+    items: String(pickField(rawOrder, ["items", "Items", "item", "orderItems"], "") || ""),
     paidAt: String(
-      pickField(rawOrder, ["paidAt", "timestamp", "paymentTime", "Timestamp"], "") || ""
+      pickField(rawOrder, ["paidAt", "timestamp", "paymentTime", "Timestamp", "paid_at"], "") || ""
     ),
     sheetStatus: normalizeStatus(
-      pickField(rawOrder, ["status", "Status", "orderStatus"], "")
+      pickField(rawOrder, ["status", "Status", "orderStatus", "order_status"], "")
     ),
+    customer: {
+      name: String(pickField(rawOrder, ["customerName", "customer", "name", "Name"], "") || ""),
+      phone: String(pickField(rawOrder, ["customerPhone", "phone", "Phone"], "") || ""),
+    },
   };
 };
 
 const parseTrackPayload = (payload, requestedOrderId) => {
+  // Handle various response structures
   const candidates = Array.isArray(payload)
     ? payload
     : Array.isArray(payload?.items)
       ? payload.items
       : Array.isArray(payload?.orders)
         ? payload.orders
-        : payload?.order
-          ? [payload.order]
-          : payload
-            ? [payload]
-            : [];
+      : Array.isArray(payload?.data)
+        ? payload.data
+      : Array.isArray(payload?.result)
+        ? payload.result
+      : payload?.order
+        ? [payload.order]
+      : payload?.orders?.[0]
+        ? [payload.orders[0]]
+      : payload?.data?.[0]
+        ? [payload.data[0]]
+      : payload?.result?.[0]
+        ? [payload.result[0]]
+      : payload
+        ? [payload]
+        : [];
 
   const normalized = candidates.map(normalizeTrackedOrder).filter(Boolean);
   if (!normalized.length) {
@@ -600,11 +619,13 @@ export async function fetchOrderStatusFromSheet({ orderDateKey, orderId }) {
         },
         6000
       );
+      // Log API response for debugging (dev only)
+      console.log("[Order Lookup] API Response:", JSON.stringify(payload));
       const parsed = parseTrackPayload(payload, orderId);
       if (parsed) {
         return parsed;
       }
-    } catch {
+    } catch (error) {
       // Try the next action variant.
     }
   }
