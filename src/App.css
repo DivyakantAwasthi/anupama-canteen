@@ -1033,41 +1033,6 @@ textarea {
     bottom: 6px;
     font-size: 10px;
   }
-
-  /* Ensure WhatsApp button doesn't overlap on small mobile screens */
-  .mobile-sticky-controls {
-    padding: 12px 12px 16px;
-    gap: 8px;
-  }
-
-  .mobile-cart-trigger {
-    max-width: 130px;
-    padding: 12px 12px;
-    font-size: 13px;
-  }
-
-  .whatsapp-mobile-group {
-    flex-shrink: 1;
-  }
-
-  .floating-whatsapp-btn {
-    position: static;
-    right: auto;
-    bottom: auto;
-    padding: 12px 16px;
-    font-size: 13px;
-    width: 100%;
-    margin: 0;
-  }
-
-  .floating-whatsapp-subtext {
-    position: static;
-    right: auto;
-    bottom: auto;
-    padding: 4px 0 0;
-    text-align: center;
-    margin: 0;
-  }
 }
 
 /* Fixed UI Overlap: Managed container for bottom-fixed controls */
@@ -1101,10 +1066,14 @@ textarea {
   .mobile-cart-trigger {
     position: static; /* Remove fixed positioning to follow flex layout */
     transform: none;
+    left: auto;
+    bottom: auto;
     flex: 0 0 auto;
     margin: 0;
-    bottom: auto;
-    left: auto;
+    max-width: 160px;
+    min-width: auto;
+    width: auto;
+    display: flex; /* Override display: none from base */
   }
 
   .whatsapp-mobile-group {
