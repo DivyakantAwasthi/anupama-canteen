@@ -131,7 +131,7 @@ module.exports = async (req, res) => {
     items,
     total: Number(total).toFixed(2),
     timestamp: resolvedTimestamp,
-    status: status || "payment_verified",
+    status: status || "pending_payment",
     name: customerName,
     email: customerEmail || "",
     phone: customerPhone,

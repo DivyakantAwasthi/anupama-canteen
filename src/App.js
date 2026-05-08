@@ -41,6 +41,27 @@ const STATUS_COPY = {
 
 const ALL_CATEGORY = "All";
 
+const normalizeOrderStatus = (value) => {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+
+  const map = {
+    pending: "pending_payment",
+    pending_payment: "pending_payment",
+    awaiting_payment: "pending_payment",
+    payment_verified: "payment_verified",
+    paid: "payment_verified",
+    preparing: "preparing",
+    ready_for_pickup: "ready_for_pickup",
+    delivered: "delivered",
+    cancelled: "cancelled",
+  };
+
+  return map[normalized] || "";
+};
+
 const inferCategory = (item) => {
   const direct = String(item.category || "").trim();
   if (direct) {
@@ -177,21 +198,24 @@ const generateOrderId = (dateKey) => {
 };
 
 const inferLocalOrderStatus = (order) => {
-  if (order.sheetStatus) {
-    return order.sheetStatus;
-  }
-  if (!order.paidAt && order.paymentMode !== "cash_counter") {
-    return "pending_payment";
+  // 1. Source of Truth: Status provided by the Google Sheet sync
+  const sheetStatus = normalizeOrderStatus(order.sheetStatus);
+  if (sheetStatus) {
+    return sheetStatus;
   }
 
-  const elapsedMinutes = Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 60000);
-  if (elapsedMinutes < 3) {
+  const explicitStatus = normalizeOrderStatus(order.status);
+  if (explicitStatus) {
+    return explicitStatus;
+  }
+
+  // 2. User Action: Transition to 'payment_verified' ONLY if paidAt is set (UPI)
+  if (order.paidAt) {
     return "payment_verified";
   }
-  if (elapsedMinutes < 12) {
-    return "preparing";
-  }
-  return "ready_for_pickup";
+
+  // 3. Initial State: Default to pending until payment or sheet update
+  return "pending_payment";
 };
 
 function App() {
@@ -218,6 +242,8 @@ function App() {
   const [trackOrderId, setTrackOrderId] = useState("");
   const [trackedOrder, setTrackedOrder] = useState(null);
   const [trackingError, setTrackingError] = useState("");
+  const [cartBadgeAnimating, setCartBadgeAnimating] = useState(false);
+  const [addToCartToast, setAddToCartToast] = useState(null);
 
   const popularItemIds = useMemo(() => {
     const counts = new Map();
@@ -504,6 +530,8 @@ function App() {
   }, [currentOrder]);
 
   const addToCart = (item, quantity = 1) => {
+    const previousCount = cartItems.length;
+    
     setCartItems((previous) => {
       const existing = previous.find((entry) => String(entry.id) === String(item.id));
       if (existing) {
@@ -526,6 +554,17 @@ function App() {
         },
       ];
     });
+
+    // Trigger badge animation
+    setCartBadgeAnimating(true);
+    setTimeout(() => setCartBadgeAnimating(false), 600);
+
+    // Show toast notification
+    setAddToCartToast({
+      message: `Added ${item.name} to cart`,
+      itemCount: previousCount + 1,
+    });
+    setTimeout(() => setAddToCartToast(null), 3000);
   };
 
   const decreaseCartItem = (itemId) => {
@@ -596,6 +635,7 @@ function App() {
       createdAt,
       paidAt: null,
       paymentMode: "upi",
+      status: "pending_payment",
       total: totalPrice,
       items,
       customer: {
@@ -644,6 +684,7 @@ function App() {
         orderId: canonicalOrderId,
         paidAt,
         paymentMode: "upi",
+        status: "payment_verified",
         saving: false,
         error: null,
       };
@@ -697,6 +738,7 @@ function App() {
         ...orderDetails,
         orderId: canonicalOrderId,
         paymentMode: "cash_counter",
+        status: "pending_payment",
         saving: false,
         error: null,
       };
@@ -709,6 +751,8 @@ function App() {
 
       setOrderDetails(nextOrder);
       setTodayOrders(readOrdersForDate(orderDetails.orderDateKey));
+      // Clear cart once the order is registered for cash payment at counter
+      setCartItems([]);
     } catch (error) {
       setOrderDetails((previous) => ({
         ...previous,
@@ -756,7 +800,7 @@ function App() {
   };
 
   const trackOrder = async () => {
-    const parsedOrderId = Number(trackOrder.trim());
+    const parsedOrderId = Number(trackOrderId.trim());
     if (!Number.isInteger(parsedOrderId) || parsedOrderId <= 0) {
       setTrackingError("Enter a valid order ID.");
       setTrackedOrder(null);
@@ -770,7 +814,7 @@ function App() {
       if (remoteOrder) {
         setTrackedOrder({
           ...remoteOrder,
-          status: remoteOrder.sheetStatus || inferLocalOrderStatus(remoteOrder),
+          status: inferLocalOrderStatus(remoteOrder),
         });
         return;
       }
@@ -1090,14 +1134,73 @@ function App() {
         </div>
       </footer>
 
-      <button
-        type="button"
-        className={`mobile-cart-trigger ${totalUnits ? "has-items" : ""}`}
-        onClick={() => setIsMobileCartOpen(true)}
-      >
-        <span>{totalUnits ? `${totalUnits} items` : "Cart"}</span>
-        <strong>Rs. {totalPrice.toFixed(0)}</strong>
-      </button>
+      {/* Fixed UI Overlap: Grouped mobile triggers into a managed container */}
+      <div className="mobile-sticky-controls">
+        <button
+          type="button"
+          className={`mobile-cart-trigger ${totalUnits ? "has-items" : ""} ${cartBadgeAnimating ? "badge-animate" : ""}`}
+          onClick={() => setIsMobileCartOpen(true)}
+          aria-label={`Cart with ${totalUnits} items`}
+        >
+          <div className="cart-trigger-content">
+            <svg
+              className="cart-icon"
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z" />
+            </svg>
+            <div className="cart-trigger-badge">
+              <span className="badge-number">{totalUnits}</span>
+            </div>
+          </div>
+          <span className="cart-trigger-text">{totalUnits ? `${totalUnits} item${totalUnits !== 1 ? "s" : ""}` : "Cart"}</span>
+        </button>
+
+        <div className="whatsapp-mobile-group">
+          <a
+            href={SITE_CONTENT.whatsappLink}
+            target="_blank"
+            rel="noreferrer"
+            className="floating-whatsapp-btn"
+            aria-label="Order on WhatsApp"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="24"
+              height="24"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554-0.049 11.89-4.837 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+            </svg>
+            <span>Order on WhatsApp</span>
+          </a>
+          <p className="floating-whatsapp-subtext">Browse menu &amp; order on WhatsApp</p>
+        </div>
+      </div>
+
+      {/* Add to Cart Toast Notification */}
+      {addToCartToast && (
+        <div className="add-to-cart-toast">
+          <div className="toast-content">
+            <svg
+              className="toast-icon"
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+            </svg>
+            <span>{addToCartToast.message}</span>
+          </div>
+        </div>
+      )}
 
       {isMobileCartOpen ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true">
@@ -1270,27 +1373,6 @@ function App() {
           </div>
         </div>
       ) : null}
-
-      {/* Floating WhatsApp Order Button */}
-      <a
-        href={SITE_CONTENT.whatsappLink}
-        target="_blank"
-        rel="noreferrer"
-        className="floating-whatsapp-btn"
-        aria-label="Order on WhatsApp"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          width="24"
-          height="24"
-          fill="currentColor"
-          aria-hidden="true"
-        >
-          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554-0.049 11.89-4.837 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-        </svg>
-        <span>Order on WhatsApp</span>
-      </a>
-      <p className="floating-whatsapp-subtext">Browse menu &amp; order instantly on WhatsApp</p>
     </div>
   );
 }

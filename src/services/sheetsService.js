@@ -540,7 +540,7 @@ const normalizeTrackedOrder = (rawOrder) => {
     total: Number(pickField(rawOrder, ["total", "Total", "amount", "Amount"], 0)) || 0,
     items: String(pickField(rawOrder, ["items", "Items", "item", "orderItems"], "") || ""),
     paidAt: String(
-      pickField(rawOrder, ["paidAt", "timestamp", "paymentTime", "Timestamp", "paid_at"], "") || ""
+      pickField(rawOrder, ["paidAt", "paymentTime", "paid_at", "paidAtTimestamp"], "") || ""
     ),
     sheetStatus: normalizeStatus(
       pickField(rawOrder, ["status", "Status", "orderStatus", "order_status"], "")

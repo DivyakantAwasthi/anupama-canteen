@@ -134,7 +134,7 @@ module.exports = async (req, res) => {
       body.orderDateKey ||
       body.orderDate ||
       (timestamp ? String(timestamp).slice(0, 10) : new Date().toISOString().slice(0, 10));
-    const status = body.status || "payment_verified";
+    const status = body.status || "pending_payment";
 
     params.set('action', ORDER_POST_ACTION);
     params.set('orderId', String(orderId));

@@ -126,7 +126,7 @@ const forwardOrderToSheets = async (sourceBody) => {
     sourceBody.orderDateKey ||
     sourceBody.orderDate ||
     (timestamp ? String(timestamp).slice(0, 10) : new Date().toISOString().slice(0, 10));
-  const status = sourceBody.status || "payment_verified";
+  const status = sourceBody.status || "pending_payment";
   const actionPayload = {
     action: ORDER_POST_ACTION,
     orderId: String(orderId),

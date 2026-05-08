@@ -80,7 +80,7 @@ function Confirmation({
                 </div>
                 <p className="muted-copy">Scan to pay via UPI</p>
                 <p className="payment-instruction">
-                  Please complete payment and then click "I have paid"
+                  Complete payment and click below
                 </p>
                 <div className="confirmation-actions">
                   <a href={upiLink} className="primary-btn">
