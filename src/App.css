@@ -1336,10 +1336,15 @@ body {
     right: 12px;
     bottom: 16px;
     display: block;
+    z-index: 230;
   }
 
   .floating-whatsapp-btn {
-    position: static;
+    position: fixed;
+    right: 12px;
+    bottom: 16px;
+    z-index: 230;
+    display: flex;
     width: 52px;
     height: 52px;
     justify-content: center;
