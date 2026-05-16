@@ -22,21 +22,24 @@ export const SITE_CONTENT = {
     process.env.REACT_APP_BUSINESS_ADDRESS ||
     "Anupama Canteen, Ghaila Road, Lucknow",
   since: "2010",
-  heroHeading: "Fresh snacks in Lucknow, ready fast and packed with care.",
+  heroHeading: "Lucknow snacks, served fresh and ready fast.",
   heroSubheading:
-    "Order pav bhaji, sandwiches, maggi, dosa, tea, and quick meals from a cleaner, faster local ordering experience.",
+    "Order pav bhaji, sandwiches, maggi, dosa, tea, and quick meals from a trusted local canteen with UPI and WhatsApp ordering.",
   heroImage: "/images/cheese-vada-pav.jpg",
   heroImageFallback: "/menu-placeholder.svg",
   primaryCta: "Start Your Order",
   secondaryCta: "Browse Menu",
   deliveryMessage: "Fast pickup and local delivery support",
   seoTitle:
-    "Anupama Canteen | Snacks in Lucknow | Pav Bhaji, Sandwiches & Fast Food",
+    "Anupama Canteen | Hygienic Snacks in Lucknow | Pav Bhaji & Fast Food",
   seoDescription:
-    "Order snacks in Lucknow from Anupama Canteen. Freshly prepared pav bhaji, sandwiches, maggi, dosa, tea, and more with fast ordering, WhatsApp support, and pickup updates.",
+    "Order hygienic snacks in Lucknow from Anupama Canteen. Fresh pav bhaji, sandwiches, maggi, dosa, tea, and fast snacks near you with UPI and WhatsApp support.",
   seoKeywords: [
     "snacks in Lucknow",
     "pav bhaji Lucknow",
+    "fast snacks near me",
+    "hygienic snacks Lucknow",
+    "sandwiches Lucknow",
     "food delivery Lucknow",
     "Lucknow canteen food",
     "Lucknow fast food",

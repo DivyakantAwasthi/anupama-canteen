@@ -21,6 +21,7 @@ import { fetchReviewsByItemIds, saveReviewForItem } from "./services/reviewServi
 import { sendWhatsAppStatusNotification } from "./services/whatsappService";
 import { SITE_CONTENT, createWhatsAppOrderLink } from "./config/site";
 import { generateDemoReviews, getRatingsFromReviews } from "./utils/reviews";
+import { trackEvent } from "./utils/analytics";
 import "./App.css";
 
 const Confirmation = lazy(() => import("./components/Confirmation"));
@@ -109,7 +110,7 @@ const decorateMenuItem = (item, index, popularIds = new Set()) => {
         : /(sandwich|vada pav|samosa)/.test(normalizedName)
           ? "A fast, comforting favourite for any hunger break."
           : "Prepared fresh and packed carefully for quick service."),
-    badge: isPopular ? (index < 4 ? "Best seller" : "Popular") : "",
+    badge: isPopular ? (index < 4 ? "Most Loved" : "Fast Moving") : "",
     isVeg: true,
   };
 };
@@ -531,6 +532,12 @@ function App() {
 
   const addToCart = (item, quantity = 1) => {
     const previousCount = cartItems.length;
+    trackEvent("add_to_cart_click", {
+      itemId: String(item.id),
+      itemName: item.name,
+      quantity,
+      price: Number(item.price),
+    });
     
     setCartItems((previous) => {
       const existing = previous.find((entry) => String(entry.id) === String(item.id));
@@ -597,6 +604,10 @@ function App() {
     if (!cartItems.length || isSavingOrder) {
       return;
     }
+    trackEvent("checkout_click", {
+      itemCount: totalUnits,
+      total: totalPrice,
+    });
     setCheckoutError("");
     setIsMobileCartOpen(false);
     setIsCheckoutOpen(true);
@@ -869,6 +880,7 @@ function App() {
               target="_blank"
               rel="noreferrer"
               className="primary-btn"
+              onClick={() => trackEvent("whatsapp_cta_click", { label: "topbar" })}
             >
               Order on WhatsApp
             </a>
@@ -887,33 +899,35 @@ function App() {
               <button
                 type="button"
                 className="primary-btn"
-                onClick={() =>
+                onClick={() => {
+                  trackEvent("primary_cta_click", { label: SITE_CONTENT.primaryCta });
                   document.getElementById("menu-search")?.scrollIntoView({
                     behavior: "smooth",
                     block: "center",
-                  })
-                }
+                  });
+                }}
               >
                 {SITE_CONTENT.primaryCta}
               </button>
               <button
                 type="button"
                 className="soft-btn"
-                onClick={() =>
+                onClick={() => {
+                  trackEvent("secondary_cta_click", { label: SITE_CONTENT.secondaryCta });
                   document.getElementById("menu-section")?.scrollIntoView({
                     behavior: "smooth",
                     block: "start",
-                  })
-                }
+                  });
+                }}
               >
                 {SITE_CONTENT.secondaryCta}
               </button>
             </div>
 
             <div className="trust-row">
-              <span>4.8 average rating</span>
-              <span>Hygienic kitchen</span>
-              <span>Fast delivery & pickup</span>
+              <span>4.8 local rating</span>
+              <span>Ready in 15 mins</span>
+              <span>UPI & WhatsApp ordering</span>
             </div>
           </div>
 
@@ -933,7 +947,7 @@ function App() {
               </li>
               <li>
                 <strong>{estimatedPrepMinutes} mins</strong>
-                <span>estimated prep</span>
+                <span>fresh prep window</span>
               </li>
             </ul>
             <div className="hero-preview">
@@ -944,7 +958,7 @@ function App() {
               />
               <div className="hero-preview-overlay">
                 <span>Freshly prepared</span>
-                <strong>Lucknow quick bites, packed with care</strong>
+                <strong>Lucknow quick bites, hot snacks, and tea-time favourites</strong>
               </div>
             </div>
           </div>
@@ -994,6 +1008,14 @@ function App() {
                 setReviewingItem(item);
                 setIsReviewModalOpen(true);
               }}
+              onViewItem={(item) =>
+                trackEvent("menu_item_viewed", {
+                  itemId: String(item.id),
+                  itemName: item.name,
+                  price: Number(item.price),
+                  category: item.category,
+                })
+              }
             />
           </div>
 
@@ -1127,6 +1149,7 @@ function App() {
               target="_blank"
               rel="noreferrer"
               className="primary-btn"
+              onClick={() => trackEvent("whatsapp_cta_click", { label: "footer" })}
             >
               WhatsApp order
             </a>
@@ -1167,6 +1190,7 @@ function App() {
             rel="noreferrer"
             className="floating-whatsapp-btn"
             aria-label="Order on WhatsApp"
+            onClick={() => trackEvent("whatsapp_cta_click", { label: "floating" })}
           >
             <svg
               viewBox="0 0 24 24"

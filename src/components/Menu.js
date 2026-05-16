@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { sortReviews } from "../utils/reviews";
 
 const FALLBACK_IMAGE = "/menu-placeholder.svg";
@@ -21,6 +21,7 @@ function Menu({
   featuredItemIds,
   popularItemIds,
   onOpenReviewModal,
+  onViewItem,
 }) {
   const [openReviews, setOpenReviews] = useState({});
 
@@ -32,6 +33,41 @@ function Menu({
     () => new Set((popularItemIds || []).map((value) => String(value))),
     [popularItemIds]
   );
+
+  useEffect(() => {
+    if (!onViewItem || typeof IntersectionObserver === "undefined") {
+      return undefined;
+    }
+
+    const seen = new Set();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) {
+            return;
+          }
+
+          const itemId = entry.target.getAttribute("data-menu-item-id");
+          if (!itemId || seen.has(itemId)) {
+            return;
+          }
+
+          const item = items.find((candidate) => String(candidate.id) === itemId);
+          if (item) {
+            seen.add(itemId);
+            onViewItem(item);
+          }
+        });
+      },
+      { threshold: 0.55 }
+    );
+
+    document
+      .querySelectorAll("[data-menu-item-id]")
+      .forEach((card) => observer.observe(card));
+
+    return () => observer.disconnect();
+  }, [items, onViewItem]);
 
   if (isLoading) {
     return (
@@ -75,7 +111,7 @@ function Menu({
       <div className="section-heading">
         <div>
           <p className="eyebrow">Today&apos;s menu</p>
-          <h2>Order fast, pick better, checkout with confidence.</h2>
+          <h2>Fresh favourites, ready fast.</h2>
         </div>
         <span className="section-meta">{totalItems} items available</span>
       </div>
@@ -131,11 +167,11 @@ function Menu({
             const showReviews = !!openReviews[item.id];
 
             return (
-              <article className="menu-card" key={item.id}>
+              <article className="menu-card" key={item.id} data-menu-item-id={item.id}>
                 <div className="menu-image-wrap">
                   {(isFeatured || isPopular) && (
                     <span className={`card-badge ${isFeatured ? "accent" : "warm"}`}>
-                      {isFeatured ? "Best seller" : "Popular"}
+                      {isFeatured ? "Most Loved" : "Fast Moving"}
                     </span>
                   )}
                   {index < 2 && <span className="veg-badge">Veg</span>}
@@ -145,7 +181,7 @@ function Menu({
                     className="menu-image"
                     loading={index < 4 ? "eager" : "lazy"}
                     decoding="async"
-                    fetchPriority={index < 2 ? "high" : "low"}
+                    fetchpriority={index < 2 ? "high" : "low"}
                     onError={(event) => {
                       event.currentTarget.onerror = null;
                       event.currentTarget.src = FALLBACK_IMAGE;
@@ -166,10 +202,10 @@ function Menu({
                     <span>{item.category}</span>
                     {rating?.reviewCount ? (
                       <span>
-                        {rating.rating.toFixed(1)} / 5 • {rating.reviewCount} reviews
+                        {rating.rating.toFixed(1)} / 5 - {rating.reviewCount} reviews
                       </span>
                     ) : (
-                      <span>Freshly prepared on order</span>
+                      <span>Ready in about 15 mins</span>
                     )}
                   </div>
 
@@ -179,7 +215,7 @@ function Menu({
                       className="primary-btn compact-btn"
                       onClick={() => onAddToCart(item, 1)}
                     >
-                      Add to cart
+                      Add
                     </button>
                     <button
                       type="button"
@@ -195,7 +231,7 @@ function Menu({
                       <p className="review-snippet-title">Customer review</p>
                       <blockquote>&quot;{leadReview.comment}&quot;</blockquote>
                       <p className="review-snippet-meta">
-                        {leadReview.name} • {leadReview.rating}/5
+                        {leadReview.name} - {leadReview.rating}/5
                       </p>
                     </div>
                   ) : null}

@@ -77,7 +77,7 @@ describe("payment confirmation flow", () => {
       root.render(<App />);
     });
 
-    await clickByText("Add to cart");
+    await clickByText("Add");
     await clickByText("Proceed to checkout");
     await changeInput("#customer-name", "Test User");
     await changeInput("#customer-phone", "9876543210");
