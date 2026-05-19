@@ -90,7 +90,20 @@ export const dedupeMonitorOrders = (orders) => {
     }
   });
 
-  return Array.from(uniqueOrders.values());
+  const result = Array.from(uniqueOrders.values());
+
+  if (typeof window !== 'undefined' && window.location.pathname.includes('kitchen')) {
+    const hasDups = orders.length !== result.length;
+    if (hasDups) {
+      console.log('[MonitorDebug] Dedupe summary:', {
+        input: orders.length,
+        output: result.length,
+        removed: orders.length - result.length,
+      });
+    }
+  }
+
+  return result;
 };
 
 export const sortNewestFirst = (orders) =>

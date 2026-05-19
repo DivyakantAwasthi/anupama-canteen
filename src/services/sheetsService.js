@@ -382,6 +382,18 @@ const extractOrderId = (value) => {
   return extractOrderId(value.order) || extractOrderId(value.data) || extractOrderId(value.result);
 };
 
+const deepCloneOrder = (order) => {
+  if (!order || typeof order !== 'object') return order;
+  if (Array.isArray(order)) return order.map(deepCloneOrder);
+  const cloned = {};
+  for (const key in order) {
+    if (order.hasOwnProperty(key)) {
+      cloned[key] = deepCloneOrder(order[key]);
+    }
+  }
+  return cloned;
+};
+
 const buildOrderPayload = ({
   orderId,
   orderDateKey,
@@ -392,25 +404,39 @@ const buildOrderPayload = ({
   total,
   timestamp,
   status,
-}) => ({
-  action: ORDER_POST_ACTION,
-  orderId: String(orderId),
-  orderDate: orderDateKey,
-  customerName,
-  customerEmail: customerEmail || "",
-  customerPhone,
-  items,
-  total: Number(total).toFixed(2),
-  timestamp,
-  status,
-  name: customerName,
-  email: customerEmail || "",
-  phone: customerPhone,
-});
+}) => {
+  const itemsStr = String(items || "").trim();
+  const payload = {
+    action: ORDER_POST_ACTION,
+    orderId: String(orderId),
+    orderDate: orderDateKey,
+    customerName: String(customerName || "").trim(),
+    customerEmail: String(customerEmail || "").trim(),
+    customerPhone: String(customerPhone || "").trim(),
+    items: itemsStr,
+    total: Number(total).toFixed(2),
+    timestamp: String(timestamp || "").trim(),
+    status: String(status || "").trim(),
+    name: String(customerName || "").trim(),
+    email: String(customerEmail || "").trim(),
+    phone: String(customerPhone || "").trim(),
+  };
+  
+  if (typeof window !== 'undefined' && window.location.pathname.includes('kitchen')) {
+    console.log('[OrderDebug] buildOrderPayload:', { orderId, items: itemsStr, status });
+  }
+  
+  return deepCloneOrder(payload);
+};
 
 export async function appendOrderToSheet(orderData) {
-  const payload = buildOrderPayload(orderData);
+  const clonedData = deepCloneOrder(orderData);
+  const payload = buildOrderPayload(clonedData);
   const attempts = [];
+  
+  if (typeof window !== 'undefined' && window.location.pathname.includes('kitchen')) {
+    console.log('[OrderDebug] appendOrderToSheet called:', { orderId: payload.orderId, items: payload.items, status: payload.status });
+  }
 
   const proxyRequest = async () => {
     const response = await fetch(APPEND_ORDER_ENDPOINT, {

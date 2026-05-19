@@ -680,19 +680,22 @@ function App() {
     setIsSavingOrder(true);
 
     const paidAt = new Date().toISOString();
+    const orderSnapshot = {
+      orderId: orderDetails.orderId,
+      orderDateKey: orderDetails.orderDateKey,
+      customerName: String(orderDetails.customer.name).trim(),
+      customerEmail: String(orderDetails.customer.email).trim(),
+      customerPhone: String(orderDetails.customer.phone).trim(),
+      items: String(orderDetails.items).trim(),
+      total: Number(orderDetails.total),
+      timestamp: paidAt,
+      status: "payment_verified",
+    };
+
+    console.log('[ConfirmPayment] Submitting order:', { orderId: orderSnapshot.orderId, items: orderSnapshot.items });
 
     try {
-      const result = await appendOrderToSheet({
-        orderId: orderDetails.orderId,
-        orderDateKey: orderDetails.orderDateKey,
-        customerName: orderDetails.customer.name,
-        customerEmail: orderDetails.customer.email,
-        customerPhone: orderDetails.customer.phone,
-        items: orderDetails.items,
-        total: orderDetails.total,
-        timestamp: paidAt,
-        status: "payment_verified",
-      });
+      const result = await appendOrderToSheet(orderSnapshot);
 
       const canonicalOrderId = Number(result.orderId || orderDetails.orderId);
       const nextOrder = {
@@ -736,18 +739,23 @@ function App() {
     setOrderDetails((previous) => ({ ...previous, saving: true, error: null }));
     setIsSavingOrder(true);
 
+    const cashTimestamp = new Date().toISOString();
+    const orderSnapshot = {
+      orderId: orderDetails.orderId,
+      orderDateKey: orderDetails.orderDateKey,
+      customerName: String(orderDetails.customer.name).trim(),
+      customerEmail: String(orderDetails.customer.email).trim(),
+      customerPhone: String(orderDetails.customer.phone).trim(),
+      items: String(orderDetails.items).trim(),
+      total: Number(orderDetails.total),
+      timestamp: cashTimestamp,
+      status: "pending_payment",
+    };
+
+    console.log('[CashAtCounter] Submitting order:', { orderId: orderSnapshot.orderId, items: orderSnapshot.items });
+
     try {
-      const result = await appendOrderToSheet({
-        orderId: orderDetails.orderId,
-        orderDateKey: orderDetails.orderDateKey,
-        customerName: orderDetails.customer.name,
-        customerEmail: orderDetails.customer.email,
-        customerPhone: orderDetails.customer.phone,
-        items: orderDetails.items,
-        total: orderDetails.total,
-        timestamp: new Date().toISOString(),
-        status: "pending_payment",
-      });
+      const result = await appendOrderToSheet(orderSnapshot);
 
       const canonicalOrderId = Number(result.orderId || orderDetails.orderId);
       const nextOrder = {

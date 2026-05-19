@@ -259,8 +259,10 @@ const updateOrderStatus = async (req, res) => {
     return res.status(400).json({ error: "invalid_status_payload" });
   }
 
+  console.log('[StatusUpdate] Updating order:', { orderId, status: normalizedStatus, orderDate, timestamp });
   const errors = [];
   const payload = {
+    action: "updateOrderStatus",
     orderId: String(orderId),
     id: String(orderId),
     timestamp: String(timestamp || ""),
@@ -271,9 +273,11 @@ const updateOrderStatus = async (req, res) => {
   };
 
   for (const action of UPDATE_ACTIONS) {
-    const body = new URLSearchParams({ action, ...payload }).toString();
+    const finalPayload = { ...payload, action };
+    const body = new URLSearchParams(finalPayload).toString();
 
     try {
+      console.log('[StatusUpdate] Attempt with action:', action);
       const responsePayload = await fetchJson(
         ORDERS_API_URL,
         {
@@ -291,13 +295,16 @@ const updateOrderStatus = async (req, res) => {
         throw new Error(responsePayload.error || responsePayload.message || "update rejected");
       }
 
+      console.log('[StatusUpdate] Success with action:', action, { response: responsePayload });
       return res.status(200).json({ ok: true, orderId: String(orderId), status: normalizedStatus });
     } catch (error) {
+      console.log('[StatusUpdate] Failed with action:', action, { error: error?.message });
       errors.push(`${action}: ${error?.message || "failed"}`);
       await sleep(150);
     }
   }
 
+  console.log('[StatusUpdate] All attempts failed:', errors);
   return res.status(502).json({ error: "status_update_failed", detail: errors.join(" | ") });
 };
 
