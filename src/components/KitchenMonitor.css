@@ -98,6 +98,35 @@
   color: #e2e8f0;
 }
 
+.kitchen-date-picker {
+  display: grid;
+  min-width: 180px;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 8px;
+  background: #161c24;
+  color: #e2e8f0;
+}
+
+.kitchen-date-picker span {
+  color: #94a3b8;
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.kitchen-date-picker input {
+  min-height: 28px;
+  border: 0;
+  background: transparent;
+  color: #ffffff;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 850;
+  color-scheme: dark;
+}
+
 .kitchen-icon-btn.is-on {
   background: #14532d;
   color: #dcfce7;
@@ -389,7 +418,8 @@
   }
 
   .kitchen-stat,
-  .kitchen-icon-btn {
+  .kitchen-icon-btn,
+  .kitchen-date-picker {
     flex: 1 1 140px;
   }
 

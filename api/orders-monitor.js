@@ -20,6 +20,7 @@ const UPDATE_ACTIONS = String(
   .filter(Boolean);
 
 const sleep = (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs));
+const INDIA_TIME_ZONE = "Asia/Kolkata";
 
 const hasConfiguredValue = (value) =>
   typeof value === "string" &&
@@ -77,6 +78,45 @@ const normalizeItems = (value) => {
   return String(value || "");
 };
 
+const getIndiaDateKey = (value = new Date()) => {
+  try {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "";
+    }
+
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: INDIA_TIME_ZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(date);
+    const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${byType.year}-${byType.month}-${byType.day}`;
+  } catch {
+    return "";
+  }
+};
+
+const normalizeDateKey = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+  }
+
+  const slashMatch = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
+  if (slashMatch) {
+    return `${slashMatch[3]}-${slashMatch[2].padStart(2, "0")}-${slashMatch[1].padStart(2, "0")}`;
+  }
+
+  return getIndiaDateKey(raw);
+};
+
 const normalizeOrder = (rawOrder) => {
   if (!rawOrder || typeof rawOrder !== "object") {
     return null;
@@ -90,13 +130,16 @@ const normalizeOrder = (rawOrder) => {
     return null;
   }
 
+  const rawOrderDate = pickField(rawOrder, ["orderDate", "Order Date", "order_date"], "");
   const timestamp = String(
     pickField(rawOrder, ["timestamp", "Timestamp", "createdAt", "time", "Time", "date", "Date"], "")
   );
+  const orderDate = normalizeDateKey(rawOrderDate) || normalizeDateKey(timestamp);
 
   return {
     orderId,
-    orderKey: `${orderId}:${timestamp || ""}`,
+    orderDate,
+    orderKey: `${orderDate || "unknown"}:${orderId}:${timestamp || ""}`,
     customerName: String(
       pickField(rawOrder, ["customerName", "Customer Name", "customer", "name", "Name"], "")
     ),
@@ -162,19 +205,22 @@ const assertAuthorized = (req, res) => {
   return false;
 };
 
-const listOrders = async (res) => {
+const listOrders = async (req, res) => {
   const errors = [];
+  const selectedDate = normalizeDateKey(req.query?.date || req.query?.orderDate) || getIndiaDateKey();
 
   for (const action of LIST_ACTIONS) {
     try {
       const url = new URL(ORDERS_API_URL);
       url.searchParams.set("action", action);
       url.searchParams.set("limit", "100");
+      url.searchParams.set("date", selectedDate);
+      url.searchParams.set("orderDate", selectedDate);
 
       const payload = await fetchJson(url.toString(), { method: "GET", headers: { Accept: "application/json" } });
-      const orders = extractOrders(payload);
+      const orders = extractOrders(payload).filter((order) => order.orderDate === selectedDate);
       if (orders.length || payload?.ok === true || payload?.success === true) {
-        return res.status(200).json({ ok: true, orders });
+        return res.status(200).json({ ok: true, selectedDate, orders });
       }
     } catch (error) {
       errors.push(`${action}: ${error?.message || "failed"}`);
@@ -252,7 +298,7 @@ module.exports = async (req, res) => {
   }
 
   if (req.method === "GET") {
-    return listOrders(res);
+    return listOrders(req, res);
   }
 
   return updateOrderStatus(req, res);

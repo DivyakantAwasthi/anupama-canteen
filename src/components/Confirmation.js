@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { QRCodeCanvas } from "qrcode.react";
 import { SiGooglepay, SiPaytm, SiPhonepe } from "react-icons/si";
 import { createWhatsAppOrderLink } from "../config/site";
 
@@ -29,7 +28,7 @@ function Confirmation({
   const upiId = String(process.env.REACT_APP_UPI_ID || "9838383231@okbizaxis")
     .trim()
     .toLowerCase();
-  const payeeName = String(process.env.REACT_APP_UPI_PAYEE_NAME || "Anupama canteen").trim();
+  const payeeName = String(process.env.REACT_APP_UPI_PAYEE_NAME || "Anupama Canteen").trim();
   const amount = Number(order.total || 0).toFixed(2);
   const note = `Order ${order.orderId}`;
   const upiLink = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(
@@ -92,17 +91,11 @@ function Confirmation({
                   <h2>{payeeName}</h2>
                 </div>
                 <div className="qr-card">
-                  <QRCodeCanvas
-                    value={upiLink}
-                    size={240}
-                    includeMargin
-                    level="H"
-                    imageSettings={{
-                      src: "/logo.png",
-                      height: 42,
-                      width: 42,
-                      excavate: true,
-                    }}
+                  <img
+                    src="/payment-qr.jpeg"
+                    alt="Google Pay QR code for Anupama Canteen UPI payment"
+                    width="688"
+                    height="934"
                   />
                 </div>
                 <div className="payment-rail" aria-label="Supported UPI apps">
@@ -123,7 +116,7 @@ function Confirmation({
                   </button>
                 </div>
                 <p className="payment-instruction">
-                  Complete payment and click below
+                  Scan the QR or open your UPI app. Complete payment and click below.
                 </p>
                 <div className="confirmation-actions">
                   <a href={upiLink} className="primary-btn">

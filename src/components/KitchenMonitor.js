@@ -5,6 +5,7 @@ import {
   ORDER_STATUS_LABELS,
   ORDER_STATUS_OPTIONS,
   fetchKitchenOrders,
+  getIndiaDateKey,
   getKitchenPollInterval,
   sortNewestFirst,
   updateKitchenOrderStatus,
@@ -72,6 +73,7 @@ function KitchenMonitor() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdatedAt, setLastUpdatedAt] = useState("");
+  const [selectedDate, setSelectedDate] = useState(() => getIndiaDateKey());
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [highlightedIds, setHighlightedIds] = useState(() => new Set());
   const [updatingOrderId, setUpdatingOrderId] = useState("");
@@ -98,7 +100,7 @@ function KitchenMonitor() {
       }
 
       try {
-        const nextOrders = await fetchKitchenOrders({ password, signal });
+        const nextOrders = await fetchKitchenOrders({ date: selectedDate, password, signal });
         const nextIds = new Set(nextOrders.map((order) => order.orderKey));
         const newIds = nextOrders
           .map((order) => order.orderKey)
@@ -130,7 +132,7 @@ function KitchenMonitor() {
         }
       }
     },
-    [clearHighlightLater, password, soundEnabled]
+    [clearHighlightLater, password, selectedDate, soundEnabled]
   );
 
   useEffect(() => {
@@ -170,6 +172,16 @@ function KitchenMonitor() {
   const activeOrders = useMemo(
     () => visibleOrders.filter((order) => order.status !== "delivered").length,
     [visibleOrders]
+  );
+  const selectedDateLabel = useMemo(
+    () =>
+      new Date(`${selectedDate}T00:00:00+05:30`).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        timeZone: "Asia/Kolkata",
+      }),
+    [selectedDate]
   );
 
   const unlock = (event) => {
@@ -254,6 +266,19 @@ function KitchenMonitor() {
             <span>Total</span>
             <strong>{visibleOrders.length}</strong>
           </div>
+          <label className="kitchen-date-picker">
+            <span>Date</span>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(event) => {
+                knownOrderIdsRef.current = new Set();
+                hasLoadedRef.current = false;
+                setHighlightedIds(new Set());
+                setSelectedDate(event.target.value || getIndiaDateKey());
+              }}
+            />
+          </label>
           <button type="button" className="kitchen-icon-btn" onClick={() => loadOrders()}>
             <FiRefreshCw />
             <span>Refresh</span>
@@ -272,7 +297,7 @@ function KitchenMonitor() {
       <section className="kitchen-toolbar">
         <div className="kitchen-pulse">
           <span />
-          Auto refresh every {Math.round(intervalMs / 1000)}s
+          Showing {selectedDateLabel} orders, auto refresh every {Math.round(intervalMs / 1000)}s
         </div>
         <div className="kitchen-clock">
           <FiClock />

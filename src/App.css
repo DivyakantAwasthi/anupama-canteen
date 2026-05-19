@@ -836,21 +836,23 @@ body {
 }
 
 .qr-card {
-  display: grid;
-  place-items: center;
-  width: min(100%, 300px);
+  display: flex;
+  justify-content: center;
+  width: min(100%, 320px);
   margin: 0 auto;
-  padding: 18px;
+  padding: 10px;
   border-radius: var(--radius-lg);
   background: #fff;
   box-shadow: inset 0 0 0 1px rgba(32, 21, 15, 0.08);
 }
 
-.qr-card canvas {
+.qr-card img {
   display: block;
-  width: min(100%, 240px) !important;
-  height: auto !important;
-  image-rendering: pixelated;
+  width: 100%;
+  max-width: 300px;
+  height: auto;
+  object-fit: contain;
+  border-radius: 16px;
 }
 
 .payment-rail,

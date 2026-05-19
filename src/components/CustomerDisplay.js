@@ -3,6 +3,7 @@ import { FiClock, FiMaximize2, FiRefreshCw } from "react-icons/fi";
 import {
   ORDER_STATUS_LABELS,
   fetchKitchenOrders,
+  getIndiaDateKey,
   getKitchenPollInterval,
   sortNewestFirst,
 } from "../services/ordersMonitorService";
@@ -23,11 +24,25 @@ const formatTime = (value) => {
   });
 };
 
+const formatCurrency = (value) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
+
+const splitItems = (items) =>
+  String(items || "")
+    .split(/,\s*/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
 function CustomerDisplay() {
   const [orders, setOrders] = useState([]);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdatedAt, setLastUpdatedAt] = useState("");
+  const [selectedDate, setSelectedDate] = useState(() => getIndiaDateKey());
   const [highlightedIds, setHighlightedIds] = useState(() => new Set());
   const knownOrderIdsRef = useRef(new Set());
   const hasLoadedRef = useRef(false);
@@ -52,7 +67,7 @@ function CustomerDisplay() {
       }
 
       try {
-        const nextOrders = await fetchKitchenOrders({ signal });
+        const nextOrders = await fetchKitchenOrders({ date: selectedDate, signal });
         const nextIds = new Set(nextOrders.map((order) => order.orderKey));
         const newIds = nextOrders
           .map((order) => order.orderKey)
@@ -78,7 +93,7 @@ function CustomerDisplay() {
         }
       }
     },
-    [clearHighlightLater]
+    [clearHighlightLater, selectedDate]
   );
 
   useEffect(() => {
@@ -108,14 +123,21 @@ function CustomerDisplay() {
   );
 
   const visibleOrders = useMemo(
-    () =>
-      sortNewestFirst(orders)
-        .filter((order) => ["preparing", "ready"].includes(order.status))
-        .slice(0, 18),
+    () => sortNewestFirst(orders).slice(0, 24),
     [orders]
   );
 
   const readyOrders = visibleOrders.filter((order) => order.status === "ready").length;
+  const selectedDateLabel = useMemo(
+    () =>
+      new Date(`${selectedDate}T00:00:00+05:30`).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        timeZone: "Asia/Kolkata",
+      }),
+    [selectedDate]
+  );
 
   const openFullscreen = () => {
     document.documentElement.requestFullscreen?.();
@@ -133,6 +155,19 @@ function CustomerDisplay() {
             <span>Ready</span>
             <strong>{readyOrders}</strong>
           </div>
+          <label className="kitchen-date-picker">
+            <span>Date</span>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(event) => {
+                knownOrderIdsRef.current = new Set();
+                hasLoadedRef.current = false;
+                setHighlightedIds(new Set());
+                setSelectedDate(event.target.value || getIndiaDateKey());
+              }}
+            />
+          </label>
           <button type="button" className="kitchen-icon-btn" onClick={() => loadOrders()}>
             <FiRefreshCw />
             <span>Refresh</span>
@@ -147,7 +182,7 @@ function CustomerDisplay() {
       <section className="kitchen-toolbar">
         <div className="kitchen-pulse">
           <span />
-          Auto refresh every {Math.round(intervalMs / 1000)}s
+          Showing {selectedDateLabel} orders, auto refresh every {Math.round(intervalMs / 1000)}s
         </div>
         <div className="kitchen-clock">
           <FiClock />
@@ -168,9 +203,19 @@ function CustomerDisplay() {
               }`}
               key={order.orderKey}
             >
-              <span>#{order.orderId}</span>
-              <strong>{ORDER_STATUS_LABELS[order.status]}</strong>
-              <small>{formatTime(order.timestamp)}</small>
+              <div className="customer-status-top">
+                <span>#{order.orderId}</span>
+                <strong>{ORDER_STATUS_LABELS[order.status]}</strong>
+              </div>
+              <p>{order.customerName}</p>
+              <ul>
+                {splitItems(order.items).map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+              <small>
+                {formatTime(order.timestamp)} | {formatCurrency(order.total)}
+              </small>
             </article>
           ))}
         </section>

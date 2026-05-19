@@ -1,5 +1,6 @@
 const MONITOR_ENDPOINT = process.env.REACT_APP_ORDERS_MONITOR_ENDPOINT || "/api/orders-monitor";
 const POLL_INTERVAL_MS = Number(process.env.REACT_APP_KITCHEN_POLL_MS || 7000);
+const INDIA_TIME_ZONE = "Asia/Kolkata";
 
 export const ORDER_STATUS_OPTIONS = ["pending", "preparing", "ready", "delivered"];
 
@@ -45,9 +46,28 @@ const parseTimeValue = (value) => {
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 };
 
+export const getIndiaDateKey = (value = new Date()) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: INDIA_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${byType.year}-${byType.month}-${byType.day}`;
+};
+
 export const normalizeMonitorOrder = (order) => ({
   orderId: String(order?.orderId || "").trim(),
-  orderKey: String(order?.orderKey || `${order?.orderId || ""}:${order?.timestamp || ""}`).trim(),
+  orderDate: String(order?.orderDate || "").trim(),
+  orderKey: String(
+    order?.orderKey || `${order?.orderDate || ""}:${order?.orderId || ""}:${order?.timestamp || ""}`
+  ).trim(),
   customerName: String(order?.customerName || "Guest").trim() || "Guest",
   items: String(order?.items || "").trim(),
   total: Number(order?.total || 0),
@@ -78,8 +98,15 @@ const readJson = async (response) => {
   return payload;
 };
 
-export async function fetchKitchenOrders({ password, signal } = {}) {
-  const response = await fetch(MONITOR_ENDPOINT, {
+export async function fetchKitchenOrders({ date, password, signal } = {}) {
+  const url = new URL(
+    MONITOR_ENDPOINT,
+    typeof window !== "undefined" ? window.location.origin : "http://localhost"
+  );
+  url.searchParams.set("date", date || getIndiaDateKey());
+  url.searchParams.set("orderDate", date || getIndiaDateKey());
+
+  const response = await fetch(url.toString(), {
     method: "GET",
     headers: {
       Accept: "application/json",

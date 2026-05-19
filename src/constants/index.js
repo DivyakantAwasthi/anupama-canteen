@@ -169,8 +169,8 @@ export const CATEGORY_LABELS = {
 // ============================================================================
 
 export const PAYMENT_CONSTANTS = {
-  UPI_ID: process.env.REACT_APP_UPI_ID || "9838383231@ptsbi",
-  UPI_PAYEE_NAME: process.env.REACT_APP_UPI_PAYEE_NAME || "Utkarsh Shukla",
+  UPI_ID: process.env.REACT_APP_UPI_ID || "9838383231@okbizaxis",
+  UPI_PAYEE_NAME: process.env.REACT_APP_UPI_PAYEE_NAME || "Anupama Canteen",
 };
 
 // ============================================================================

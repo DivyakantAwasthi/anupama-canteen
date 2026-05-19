@@ -3,10 +3,6 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import { appendOrderToSheet, readCachedMenuItems } from "./services/sheetsService";
 
-jest.mock("qrcode.react", () => ({
-  QRCodeCanvas: () => <div data-testid="qr-code" />,
-}));
-
 jest.mock("./services/sheetsService", () => ({
   appendOrderToSheet: jest.fn(async ({ orderId }) => ({ ok: true, orderId })),
   FALLBACK_MENU_DATA: [{ id: "tea", name: "Tea", price: 20, active: true }],
