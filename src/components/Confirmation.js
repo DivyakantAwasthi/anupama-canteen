@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { QRCodeCanvas } from "qrcode.react";
+import { SiGooglepay, SiPaytm, SiPhonepe } from "react-icons/si";
 import { createWhatsAppOrderLink } from "../config/site";
 
 const ORDER_STATUS_COPY = {
@@ -19,15 +20,16 @@ function Confirmation({
   business,
 }) {
   const [showPaymentConfirm, setShowPaymentConfirm] = useState(false);
+  const [copyState, setCopyState] = useState("Copy UPI ID");
 
   if (!order) {
     return null;
   }
 
-  const upiId = String(process.env.REACT_APP_UPI_ID || "9838383231@ptsbi")
+  const upiId = String(process.env.REACT_APP_UPI_ID || "9838383231@okbizaxis")
     .trim()
     .toLowerCase();
-  const payeeName = process.env.REACT_APP_UPI_PAYEE_NAME || "Utkarsh Shukla";
+  const payeeName = String(process.env.REACT_APP_UPI_PAYEE_NAME || "Anupama canteen").trim();
   const amount = Number(order.total || 0).toFixed(2);
   const note = `Order ${order.orderId}`;
   const upiLink = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(
@@ -41,6 +43,16 @@ function Confirmation({
   });
   const isPaid = Boolean(order.paidAt);
   const isCashOrder = order.paymentMode === "cash_counter";
+  const copyUpiId = async () => {
+    try {
+      await navigator.clipboard.writeText(upiId);
+      setCopyState("Copied");
+      window.setTimeout(() => setCopyState("Copy UPI ID"), 1600);
+    } catch {
+      setCopyState("Copy failed");
+      window.setTimeout(() => setCopyState("Copy UPI ID"), 1600);
+    }
+  };
 
   return (
     <section className="confirmation-shell">
@@ -68,17 +80,48 @@ function Confirmation({
             </div>
             <div className="summary-tile">
               <span>Support</span>
-              <strong>{business.displayPhone}</strong>
+              <a href={business.callLink}>{business.displayPhone}</a>
             </div>
           </div>
 
           <div className="confirmation-payment">
             {!isPaid && !isCashOrder ? (
               <>
-                <div className="qr-card">
-                  <QRCodeCanvas value={upiLink} size={200} includeMargin />
+                <div className="payment-heading">
+                  <p className="eyebrow">Scan & Pay via UPI</p>
+                  <h2>{payeeName}</h2>
                 </div>
-                <p className="muted-copy">Scan to pay via UPI</p>
+                <div className="qr-card">
+                  <QRCodeCanvas
+                    value={upiLink}
+                    size={240}
+                    includeMargin
+                    level="H"
+                    imageSettings={{
+                      src: "/logo.png",
+                      height: 42,
+                      width: 42,
+                      excavate: true,
+                    }}
+                  />
+                </div>
+                <div className="payment-rail" aria-label="Supported UPI apps">
+                  <span>
+                    <SiGooglepay /> GPay
+                  </span>
+                  <span>
+                    <SiPhonepe /> PhonePe
+                  </span>
+                  <span>
+                    <SiPaytm /> Paytm
+                  </span>
+                </div>
+                <div className="upi-copy-row">
+                  <span>UPI ID: {upiId}</span>
+                  <button type="button" className="link-btn" onClick={copyUpiId}>
+                    {copyState}
+                  </button>
+                </div>
                 <p className="payment-instruction">
                   Complete payment and click below
                 </p>
@@ -103,7 +146,7 @@ function Confirmation({
                     Pay at counter
                   </button>
                 </div>
-                <p className="muted-copy">UPI ID: {upiId}</p>
+                <p className="muted-copy">Phone: {business.displayPhone}</p>
               </>
             ) : null}
 

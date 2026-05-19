@@ -1,9 +1,16 @@
-const BUSINESS_PHONE = process.env.REACT_APP_BUSINESS_PHONE || "9838383231";
-const SANITIZED_PHONE = BUSINESS_PHONE.replace(/\D/g, "");
+const BUSINESS_PHONE = String(process.env.REACT_APP_BUSINESS_PHONE || "9838383231").trim();
+const RAW_PHONE_DIGITS = BUSINESS_PHONE.replace(/\D/g, "");
+const SANITIZED_PHONE =
+  RAW_PHONE_DIGITS.length === 12 && RAW_PHONE_DIGITS.startsWith("91")
+    ? RAW_PHONE_DIGITS.slice(2)
+    : RAW_PHONE_DIGITS;
 const DISPLAY_PHONE =
   SANITIZED_PHONE.length === 10
     ? `+91 ${SANITIZED_PHONE.slice(0, 5)} ${SANITIZED_PHONE.slice(5)}`
     : BUSINESS_PHONE;
+const MAPS_LINK = String(
+  process.env.REACT_APP_GOOGLE_MAPS_URL || "https://g.page/r/CSEAz_a6ceGfECI"
+).trim();
 
 // WhatsApp Catalog link (no pre-filled message)
 export const WHATSAPP_CATALOG_LINK = `https://wa.me/c/91${SANITIZED_PHONE}`;
@@ -16,6 +23,7 @@ export const SITE_CONTENT = {
   phone: SANITIZED_PHONE,
   displayPhone: DISPLAY_PHONE,
   callLink: `tel:+91${SANITIZED_PHONE}`,
+  mapsLink: MAPS_LINK,
   whatsappLink: WHATSAPP_CATALOG_LINK,
   fssaiNumber: process.env.REACT_APP_FSSAI_NUMBER || "22726739000468",
   address:

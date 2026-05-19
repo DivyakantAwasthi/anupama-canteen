@@ -11,6 +11,7 @@ import { FiMapPin, FiPhoneCall, FiShield } from "react-icons/fi";
 import Menu from "./components/Menu";
 import Cart from "./components/Cart";
 import KitchenMonitor from "./components/KitchenMonitor";
+import CustomerDisplay from "./components/CustomerDisplay";
 import {
   appendOrderToSheet,
   FALLBACK_MENU_DATA,
@@ -222,7 +223,8 @@ const inferLocalOrderStatus = (order) => {
 
 function App() {
   const routePath = typeof window !== "undefined" ? window.location.pathname : "/";
-  const isKitchenRoute = ["/kitchen", "/orders-monitor"].includes(routePath);
+  const isKitchenRoute = ["/kitchen", "/orders-monitor", "/kitchen-display"].includes(routePath);
+  const isCustomerDisplayRoute = routePath === "/customer-display";
   const [heroImageSrc, setHeroImageSrc] = useState(SITE_CONTENT.heroImage);
   const [menuItems, setMenuItems] = useState(() => readCachedMenuItems());
   const [isMenuLoading, setIsMenuLoading] = useState(() => readCachedMenuItems().length === 0);
@@ -866,6 +868,10 @@ function App() {
     return <KitchenMonitor />;
   }
 
+  if (isCustomerDisplayRoute) {
+    return <CustomerDisplay />;
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -1118,7 +1124,12 @@ function App() {
           </div>
 
           <div className="site-footer-grid">
-            <div className="footer-detail-card">
+            <a
+              className="footer-detail-card"
+              href={SITE_CONTENT.mapsLink}
+              target="_blank"
+              rel="noreferrer"
+            >
               <span className="footer-icon" aria-hidden="true">
                 <FiMapPin />
               </span>
@@ -1126,8 +1137,8 @@ function App() {
                 <span>Address</span>
                 <strong>{SITE_CONTENT.address}</strong>
               </div>
-            </div>
-            <div className="footer-detail-card">
+            </a>
+            <a className="footer-detail-card" href={SITE_CONTENT.callLink}>
               <span className="footer-icon" aria-hidden="true">
                 <FiPhoneCall />
               </span>
@@ -1135,7 +1146,7 @@ function App() {
                 <span>Phone</span>
                 <strong>{SITE_CONTENT.displayPhone}</strong>
               </div>
-            </div>
+            </a>
             <div className="footer-detail-card">
               <span className="footer-icon" aria-hidden="true">
                 <FiShield />

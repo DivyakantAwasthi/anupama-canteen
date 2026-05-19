@@ -13,6 +13,8 @@
     { "src": "/payment-confirmed", "dest": "/api/payment-confirmed.js", "methods": ["POST"] },
     { "src": "/kitchen", "dest": "/index.html" },
     { "src": "/orders-monitor", "dest": "/index.html" },
+    { "src": "/kitchen-display", "dest": "/index.html" },
+    { "src": "/customer-display", "dest": "/index.html" },
     { "src": "/(.*)", "dest": "/$1" }
   ]
 }
