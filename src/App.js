@@ -10,6 +10,7 @@ import {
 import { FiMapPin, FiPhoneCall, FiShield } from "react-icons/fi";
 import Menu from "./components/Menu";
 import Cart from "./components/Cart";
+import KitchenMonitor from "./components/KitchenMonitor";
 import {
   appendOrderToSheet,
   FALLBACK_MENU_DATA,
@@ -220,6 +221,8 @@ const inferLocalOrderStatus = (order) => {
 };
 
 function App() {
+  const routePath = typeof window !== "undefined" ? window.location.pathname : "/";
+  const isKitchenRoute = ["/kitchen", "/orders-monitor"].includes(routePath);
   const [heroImageSrc, setHeroImageSrc] = useState(SITE_CONTENT.heroImage);
   const [menuItems, setMenuItems] = useState(() => readCachedMenuItems());
   const [isMenuLoading, setIsMenuLoading] = useState(() => readCachedMenuItems().length === 0);
@@ -857,6 +860,10 @@ function App() {
         </Suspense>
       </div>
     );
+  }
+
+  if (isKitchenRoute) {
+    return <KitchenMonitor />;
   }
 
   return (
