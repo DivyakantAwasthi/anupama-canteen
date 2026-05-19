@@ -101,9 +101,9 @@ function KitchenMonitor() {
 
       try {
         const nextOrders = await fetchKitchenOrders({ date: selectedDate, password, signal });
-        const nextIds = new Set(nextOrders.map((order) => order.orderKey));
+        const nextIds = new Set(nextOrders.map((order) => order.orderId));
         const newIds = nextOrders
-          .map((order) => order.orderKey)
+          .map((order) => order.orderId)
           .filter((orderId) => hasLoadedRef.current && !knownOrderIdsRef.current.has(orderId));
 
         if (newIds.length) {
@@ -203,13 +203,12 @@ function KitchenMonitor() {
   };
 
   const changeStatus = async (targetOrder, status) => {
-    setUpdatingOrderId(targetOrder.orderKey);
+    setUpdatingOrderId(targetOrder.orderId);
     setOrders((previous) =>
       previous.map((order) =>
-        order.orderKey === targetOrder.orderKey ? { ...order, status } : order
+        order.orderId === targetOrder.orderId ? { ...order, status } : order
       )
     );
-
     try {
       await updateKitchenOrderStatus({
         orderId: targetOrder.orderId,
@@ -362,7 +361,7 @@ function KitchenMonitor() {
                       type="button"
                       className={order.status === status ? "is-active" : ""}
                       key={status}
-                      disabled={updatingOrderId === order.orderKey}
+                      disabled={updatingOrderId === order.orderId}
                       onClick={() => changeStatus(order, status)}
                     >
                       {ORDER_STATUS_LABELS[status]}

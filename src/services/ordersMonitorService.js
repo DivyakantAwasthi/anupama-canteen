@@ -62,18 +62,36 @@ export const getIndiaDateKey = (value = new Date()) => {
   return `${byType.year}-${byType.month}-${byType.day}`;
 };
 
+const getMonitorOrderKey = (order) =>
+  String(`${order?.orderDate || ""}:${order?.orderId || ""}`).trim();
+
 export const normalizeMonitorOrder = (order) => ({
   orderId: String(order?.orderId || "").trim(),
   orderDate: String(order?.orderDate || "").trim(),
-  orderKey: String(
-    order?.orderKey || `${order?.orderDate || ""}:${order?.orderId || ""}:${order?.timestamp || ""}`
-  ).trim(),
+  orderKey: getMonitorOrderKey(order),
   customerName: String(order?.customerName || "Guest").trim() || "Guest",
   items: String(order?.items || "").trim(),
   total: Number(order?.total || 0),
   timestamp: String(order?.timestamp || ""),
   status: normalizeStatus(order?.status),
 });
+
+export const dedupeMonitorOrders = (orders) => {
+  const uniqueOrders = new Map();
+  orders.forEach((order) => {
+    const key = getMonitorOrderKey(order);
+    if (!key) {
+      return;
+    }
+
+    const existing = uniqueOrders.get(key);
+    if (!existing || parseTimeValue(order.timestamp) > parseTimeValue(existing.timestamp)) {
+      uniqueOrders.set(key, order);
+    }
+  });
+
+  return Array.from(uniqueOrders.values());
+};
 
 export const sortNewestFirst = (orders) =>
   orders.slice().sort((left, right) => {
@@ -113,11 +131,14 @@ export async function fetchKitchenOrders({ date, password, signal } = {}) {
       ...(password ? { "x-monitor-password": password } : {}),
     },
     signal,
+    cache: "no-store",
   });
 
   const payload = await readJson(response);
-  const orders = Array.isArray(payload.orders) ? payload.orders : [];
-  return sortNewestFirst(orders.map(normalizeMonitorOrder).filter((order) => order.orderId));
+  const rawOrders = Array.isArray(payload.orders) ? payload.orders : [];
+  const normalizedOrders = rawOrders.map(normalizeMonitorOrder).filter((order) => order.orderId);
+  const uniqueOrders = dedupeMonitorOrders(normalizedOrders);
+  return sortNewestFirst(uniqueOrders);
 }
 
 export async function updateKitchenOrderStatus({ orderId, status, timestamp, password }) {

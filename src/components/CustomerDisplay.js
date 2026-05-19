@@ -68,10 +68,10 @@ function CustomerDisplay() {
 
       try {
         const nextOrders = await fetchKitchenOrders({ date: selectedDate, signal });
-        const nextIds = new Set(nextOrders.map((order) => order.orderKey));
+        const nextIds = new Set(nextOrders.map((order) => order.orderId));
         const newIds = nextOrders
-          .map((order) => order.orderKey)
-          .filter((orderKey) => hasLoadedRef.current && !knownOrderIdsRef.current.has(orderKey));
+          .map((order) => order.orderId)
+          .filter((orderId) => hasLoadedRef.current && !knownOrderIdsRef.current.has(orderId));
 
         if (newIds.length) {
           setHighlightedIds((previous) => new Set([...previous, ...newIds]));
@@ -199,9 +199,9 @@ function CustomerDisplay() {
           {visibleOrders.map((order) => (
             <article
               className={`customer-status-card status-${order.status} ${
-                highlightedIds.has(order.orderKey) ? "is-new" : ""
+                highlightedIds.has(order.orderId) ? "is-new" : ""
               }`}
-              key={order.orderKey}
+              key={order.orderId}
             >
               <div className="customer-status-top">
                 <span>#{order.orderId}</span>

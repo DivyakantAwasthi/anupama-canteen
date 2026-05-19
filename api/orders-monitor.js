@@ -117,6 +117,8 @@ const normalizeDateKey = (value) => {
   return getIndiaDateKey(raw);
 };
 
+const getOrderKey = (order) => String(`${order.orderDate || ""}:${order.orderId || ""}`).trim();
+
 const normalizeOrder = (rawOrder) => {
   if (!rawOrder || typeof rawOrder !== "object") {
     return null;
@@ -139,7 +141,7 @@ const normalizeOrder = (rawOrder) => {
   return {
     orderId,
     orderDate,
-    orderKey: `${orderDate || "unknown"}:${orderId}:${timestamp || ""}`,
+    orderKey: getOrderKey({ orderId, orderDate }),
     customerName: String(
       pickField(rawOrder, ["customerName", "Customer Name", "customer", "name", "Name"], "")
     ),
@@ -152,6 +154,24 @@ const normalizeOrder = (rawOrder) => {
       pickField(rawOrder, ["status", "Status", "orderStatus", "order_status"], "")
     ),
   };
+};
+
+const dedupeOrdersById = (orders) => {
+  const uniqueOrders = new Map();
+
+  orders.forEach((order) => {
+    const key = getOrderKey(order);
+    if (!key) {
+      return;
+    }
+
+    const existing = uniqueOrders.get(key);
+    if (!existing || parseTimeValue(order.timestamp) > parseTimeValue(existing.timestamp)) {
+      uniqueOrders.set(key, order);
+    }
+  });
+
+  return Array.from(uniqueOrders.values());
 };
 
 const extractOrders = (payload) => {
@@ -218,7 +238,7 @@ const listOrders = async (req, res) => {
       url.searchParams.set("orderDate", selectedDate);
 
       const payload = await fetchJson(url.toString(), { method: "GET", headers: { Accept: "application/json" } });
-      const orders = extractOrders(payload).filter((order) => order.orderDate === selectedDate);
+      const orders = dedupeOrdersById(extractOrders(payload).filter((order) => order.orderDate === selectedDate));
       if (orders.length || payload?.ok === true || payload?.success === true) {
         return res.status(200).json({ ok: true, selectedDate, orders });
       }
