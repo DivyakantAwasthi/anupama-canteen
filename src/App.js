@@ -641,9 +641,14 @@ function App() {
     const dateKey = getTodayKey();
     const orderId = generateOrderId(dateKey);
     const createdAt = new Date().toISOString();
-    const items = cartItems
-      .map((item) => `${item.name} x${Number(item.quantity)}`)
+    
+    // CRITICAL: Create immutable snapshot of cart items to prevent corruption
+    const cartSnapshot = JSON.parse(JSON.stringify(cartItems));
+    const items = cartSnapshot
+      .map((item) => `${String(item.name).trim()} x${Number(item.quantity)}`)
       .join(", ");
+    
+    console.log('[Order] Placing order with items:', { orderId, items, cartLength: cartItems.length });
 
     const nextOrder = {
       orderId,
@@ -654,6 +659,7 @@ function App() {
       status: "pending_payment",
       total: totalPrice,
       items,
+      cartSnapshot,
       customer: {
         name,
         email,
@@ -692,6 +698,16 @@ function App() {
       status: "payment_verified",
     };
 
+    if (!orderSnapshot.items || orderSnapshot.items.length === 0) {
+      console.error('[ConfirmPayment] CRITICAL: Items corrupted!');
+      setOrderDetails((previous) => ({
+        ...previous,
+        saving: false,
+        error: "Order items corrupted. Please try again.",
+      }));
+      setIsSavingOrder(false);
+      return;
+    }
     console.log('[ConfirmPayment] Submitting order:', { orderId: orderSnapshot.orderId, items: orderSnapshot.items });
 
     try {
@@ -751,6 +767,18 @@ function App() {
       timestamp: cashTimestamp,
       status: "pending_payment",
     };
+
+    // CRITICAL: Validate items haven't been corrupted
+    if (!orderSnapshot.items || orderSnapshot.items.length === 0) {
+      console.error('[CashAtCounter] CRITICAL: Items corrupted or empty!');
+      setOrderDetails((previous) => ({
+        ...previous,
+        saving: false,
+        error: "Order items corrupted. Please try again.",
+      }));
+      setIsSavingOrder(false);
+      return;
+    }
 
     console.log('[CashAtCounter] Submitting order:', { orderId: orderSnapshot.orderId, items: orderSnapshot.items });
 

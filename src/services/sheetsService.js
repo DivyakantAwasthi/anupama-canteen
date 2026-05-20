@@ -404,8 +404,28 @@ const buildOrderPayload = ({
   total,
   timestamp,
   status,
+  cartSnapshot, // NEW: Include cart snapshot for validation
 }) => {
+  // CRITICAL: Validate items string is not empty
   const itemsStr = String(items || "").trim();
+  if (!itemsStr || itemsStr.length === 0) {
+    console.error('[buildOrderPayload] CRITICAL VALIDATION FAILURE: Items is empty or missing', {
+      items,
+      itemsStr,
+      orderId,
+      cartSnapshot,
+    });
+    throw new Error('Order items cannot be empty. Data corruption detected.');
+  }
+
+  // NEW: Validate items string contains expected format
+  if (!itemsStr.includes('x')) {
+    console.warn('[buildOrderPayload] WARNING: Items string might be malformed', {
+      itemsStr,
+      orderId,
+    });
+  }
+
   const payload = {
     action: ORDER_POST_ACTION,
     orderId: String(orderId),
@@ -422,9 +442,13 @@ const buildOrderPayload = ({
     phone: String(customerPhone || "").trim(),
   };
   
-  if (typeof window !== 'undefined' && window.location.pathname.includes('kitchen')) {
-    console.log('[OrderDebug] buildOrderPayload:', { orderId, items: itemsStr, status });
-  }
+  console.log('[buildOrderPayload] Creating payload:', {
+    orderId: payload.orderId,
+    items: payload.items,
+    status: payload.status,
+    total: payload.total,
+    cartSnapshotLength: cartSnapshot?.length,
+  });
   
   return deepCloneOrder(payload);
 };
