@@ -155,6 +155,37 @@ export async function fetchKitchenOrders({ date, password, signal } = {}) {
 }
 
 export async function updateKitchenOrderStatus({ orderId, status, timestamp, password }) {
+  const orderDate = String(timestamp || "").slice(0, 10);
+  
+  // CRITICAL: Verify order exists before attempting update
+  console.log('[StatusUpdate] Verifying order exists:', { orderId, orderDate });
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
+    try {
+      const existing = await fetchKitchenOrders({ 
+        date: orderDate, 
+        password, 
+        signal: controller.signal
+      });
+      
+      const orderExists = existing.some(o => String(o.orderId) === String(orderId));
+      if (!orderExists) {
+        console.log('[StatusUpdate] Order not found in sheet, rejecting update:', { orderId, orderDate });
+        throw new Error(`Order #${orderId} not found in system. It may have been deleted.`);
+      }
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  } catch (checkError) {
+    if (checkError.message?.includes('not found')) {
+      throw checkError;
+    }
+    console.warn('[StatusUpdate] Existence check failed, proceeding cautiously:', checkError?.message);
+  }
+
+  // Proceed with update only if verification passed
   const response = await fetch(MONITOR_ENDPOINT, {
     method: "POST",
     headers: {
@@ -166,7 +197,7 @@ export async function updateKitchenOrderStatus({ orderId, status, timestamp, pas
       orderId,
       status,
       timestamp,
-      orderDate: String(timestamp || "").slice(0, 10),
+      orderDate,
     }),
   });
 

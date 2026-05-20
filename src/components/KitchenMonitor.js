@@ -106,6 +106,19 @@ function KitchenMonitor() {
           .map((order) => order.orderId)
           .filter((orderId) => hasLoadedRef.current && !knownOrderIdsRef.current.has(orderId));
 
+        // CRITICAL FIX: Detect and remove ghost orders (deleted from backend)
+        const deletedIds = Array.from(knownOrderIdsRef.current).filter(
+          (orderId) => !nextIds.has(orderId)
+        );
+        
+        if (deletedIds.length > 0) {
+          console.log('[KitchenMonitor] Detected deleted orders, removing:', { deletedIds });
+          // Remove deleted orders from display by not including them
+          setOrders((previous) =>
+            previous.filter((order) => nextIds.has(order.orderId))
+          );
+        }
+
         if (newIds.length) {
           setHighlightedIds((previous) => new Set([...previous, ...newIds]));
           clearHighlightLater(newIds);
@@ -124,6 +137,9 @@ function KitchenMonitor() {
           setError(requestError?.message || "Unable to load orders.");
           if (/unauthorized/i.test(requestError?.message || "")) {
             setIsUnlocked(false);
+          }
+          if (/not found|deleted/i.test(requestError?.message || "")) {
+            console.warn('[KitchenMonitor] Order not found in system:', requestError?.message);
           }
         }
       } finally {
@@ -218,7 +234,22 @@ function KitchenMonitor() {
       });
       await loadOrders({ silent: true });
     } catch (updateError) {
-      setError(updateError?.message || "Unable to update status.");
+      console.error('[KitchenMonitor] Status update error:', {
+        orderId: targetOrder.orderId,
+        error: updateError?.message,
+        isDeletedOrder: updateError?.message?.includes('not found'),
+      });
+      
+      // If order was deleted from backend, remove it from display
+      if (updateError?.message?.includes('not found')) {
+        setOrders((previous) =>
+          previous.filter((order) => order.orderId !== targetOrder.orderId)
+        );
+        setError(`Order #${targetOrder.orderId} was not found in system.`);
+      } else {
+        setError(updateError?.message || "Unable to update status.");
+      }
+      
       await loadOrders({ silent: true });
     } finally {
       setUpdatingOrderId("");

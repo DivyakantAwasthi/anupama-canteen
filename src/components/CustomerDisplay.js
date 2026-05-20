@@ -73,6 +73,19 @@ function CustomerDisplay() {
           .map((order) => order.orderId)
           .filter((orderId) => hasLoadedRef.current && !knownOrderIdsRef.current.has(orderId));
 
+        // CRITICAL FIX: Detect and remove ghost orders (deleted from backend)
+        const deletedIds = Array.from(knownOrderIdsRef.current).filter(
+          (orderId) => !nextIds.has(orderId)
+        );
+        
+        if (deletedIds.length > 0) {
+          console.log('[CustomerDisplay] Detected deleted orders, removing:', { deletedIds });
+          // Remove deleted orders from display by not including them
+          setOrders((previous) =>
+            previous.filter((order) => nextIds.has(order.orderId))
+          );
+        }
+
         if (newIds.length) {
           setHighlightedIds((previous) => new Set([...previous, ...newIds]));
           clearHighlightLater(newIds);

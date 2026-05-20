@@ -260,6 +260,41 @@ const updateOrderStatus = async (req, res) => {
   }
 
   console.log('[StatusUpdate] Updating order:', { orderId, status: normalizedStatus, orderDate, timestamp });
+  
+  // CRITICAL: Verify order exists before attempting update
+  const resolvedDate = orderDate || String(timestamp || "").slice(0, 10);
+  if (resolvedDate) {
+    try {
+      console.log('[StatusUpdate] Verifying order exists:', { orderId, resolvedDate });
+      
+      // Fetch orders for the date to verify this one exists
+      const listUrl = new URL(ORDERS_API_URL);
+      listUrl.searchParams.set("action", LIST_ACTIONS[0] || "listOrders");
+      listUrl.searchParams.set("limit", "100");
+      listUrl.searchParams.set("date", resolvedDate);
+      listUrl.searchParams.set("orderDate", resolvedDate);
+      
+      const listResponse = await fetchJson(listUrl.toString(), {
+        method: "GET",
+        headers: { Accept: "application/json" },
+      }, 7000);
+      
+      const existingOrders = extractOrders(listResponse);
+      const orderExists = existingOrders.some(o => String(o.orderId) === String(orderId));
+      
+      if (!orderExists) {
+        console.log('[StatusUpdate] Order not found in sheet, rejecting update:', { orderId, resolvedDate });
+        return res.status(404).json({ 
+          error: "order_not_found", 
+          detail: `Order #${orderId} not found in system. It may have been deleted.` 
+        });
+      }
+    } catch (checkError) {
+      console.warn('[StatusUpdate] Existence check failed, but proceeding:', checkError?.message);
+      // Don't block on check failure, but log it
+    }
+  }
+
   const errors = [];
   const payload = {
     action: "updateOrderStatus",

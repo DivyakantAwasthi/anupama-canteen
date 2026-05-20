@@ -120,6 +120,45 @@ module.exports = async (req, res) => {
   const resolvedDate =
     orderDateKey || orderDate || String(timestamp || new Date().toISOString()).slice(0, 10);
   const resolvedTimestamp = timestamp || new Date().toISOString();
+  
+  // CRITICAL: Check if order already exists to prevent duplicates
+  console.log('[AppendOrder] Checking for existing order:', { orderId, resolvedDate });
+  const existingOrders = [];
+  try {
+    const checkUrl = new URL(ORDERS_API_URL);
+    checkUrl.searchParams.set("action", "listOrders");
+    checkUrl.searchParams.set("limit", "100");
+    checkUrl.searchParams.set("date", resolvedDate);
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
+    try {
+      const checkResponse = await fetch(checkUrl.toString(), {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        signal: controller.signal,
+      });
+      const checkText = await checkResponse.text();
+      const checkPayload = checkText ? JSON.parse(checkText) : {};
+      const checkOrders = Array.isArray(checkPayload?.orders) ? checkPayload.orders : [];
+      
+      const duplicate = checkOrders.find(o => String(o?.orderId || o?.id) === String(orderId));
+      if (duplicate) {
+        console.log('[AppendOrder] Order already exists in sheet, rejecting duplicate:', { orderId });
+        return res.status(409).json({
+          error: "duplicate_order",
+          detail: `Order #${orderId} already exists. Not creating duplicate.`,
+          orderId: String(orderId),
+        });
+      }
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  } catch (checkError) {
+    console.warn('[AppendOrder] Duplicate check failed, proceeding cautiously:', checkError?.message);
+  }
+  
   const payload = {
     action: ORDER_POST_ACTION,
     orderId: String(orderId),
