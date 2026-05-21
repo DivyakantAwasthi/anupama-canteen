@@ -642,14 +642,44 @@ function App() {
     const orderId = generateOrderId(dateKey);
     const createdAt = new Date().toISOString();
     
-    // CRITICAL: Create immutable snapshot of cart items to prevent corruption
-    const cartSnapshot = JSON.parse(JSON.stringify(cartItems));
+    // CRITICAL: Create IMMUTABLE snapshot using structuredClone for maximum safety
+    // This prevents any mutations or reference sharing that could corrupt items
+    let cartSnapshot;
+    try {
+      cartSnapshot = structuredClone ? structuredClone(cartItems) : JSON.parse(JSON.stringify(cartItems));
+    } catch {
+      cartSnapshot = JSON.parse(JSON.stringify(cartItems));
+    }
+    
+    // CRITICAL: Validate cartSnapshot has items BEFORE creating items string
+    if (!cartSnapshot || cartSnapshot.length === 0) {
+      setCheckoutError("Your cart is empty. Please add items before checkout.");
+      return;
+    }
+    
+    // Create items string from snapshot - this is the IMMUTABLE source of truth
     const items = cartSnapshot
-      .map((item) => `${String(item.name).trim()} x${Number(item.quantity)}`)
+      .map((item) => {
+        const itemName = String(item.name || "").trim();
+        const qty = Number(item.quantity || 0);
+        if (!itemName || qty <= 0) {
+          throw new Error(`Invalid item: ${itemName} x${qty}`);
+        }
+        return `${itemName} x${qty}`;
+      })
       .join(", ");
     
-    console.log('[Order] Placing order with items:', { orderId, items, cartLength: cartItems.length });
+    // CRITICAL: Verify items string is valid before proceeding
+    if (!items || items.length === 0) {
+      setCheckoutError("Order items corrupted. Please clear cart and try again.");
+      console.error('[Order] CRITICAL: Items string is empty after snapshot', { cartSnapshot, items });
+      return;
+    }
+    
+    console.log('[Order] Placing order with IMMUTABLE snapshot:', { orderId, items, itemCount: cartSnapshot.length, cartSnapshotJson: JSON.stringify(cartSnapshot) });
 
+    // CRITICAL: Create order object with FULLY IMMUTABLE items field
+    // Store items as a string that cannot be mutated
     const nextOrder = {
       orderId,
       orderDateKey: dateKey,
@@ -658,16 +688,25 @@ function App() {
       paymentMode: "upi",
       status: "pending_payment",
       total: totalPrice,
-      items,
-      cartSnapshot,
+      // CRITICAL: Store items as IMMUTABLE STRING, not reference
+      items: String(items),  // Explicit string conversion to prevent any reference issues
+      // CRITICAL: Store cartSnapshot separately for validation
+      cartSnapshot: structuredClone ? structuredClone(cartSnapshot) : JSON.parse(JSON.stringify(cartSnapshot)),
       customer: {
-        name,
-        email,
-        phone,
+        name: String(name),  // Explicit string conversions
+        email: String(email),
+        phone: String(phone),
       },
       error: null,
       saving: false,
     };
+
+    // CRITICAL: Verify order object before storing
+    if (!nextOrder.items || nextOrder.items.length === 0) {
+      setCheckoutError("Order items corrupted during creation. Please try again.");
+      console.error('[Order] CRITICAL: nextOrder.items is invalid', nextOrder);
+      return;
+    }
 
     upsertOrderForDate(dateKey, nextOrder);
     setTodayOrders(readOrdersForDate(dateKey));
@@ -678,7 +717,9 @@ function App() {
   };
 
   const confirmPayment = async () => {
-    if (!orderDetails) {
+    // CRITICAL: Capture orderDetails immediately to prevent stale closure issues
+    const currentOrder = orderDetails;
+    if (!currentOrder) {
       return;
     }
 
@@ -686,36 +727,54 @@ function App() {
     setIsSavingOrder(true);
 
     const paidAt = new Date().toISOString();
+    
+    // CRITICAL: Build order snapshot with explicit validation of EVERY field
+    // Use currentOrder instead of orderDetails to avoid closure issues
     const orderSnapshot = {
-      orderId: orderDetails.orderId,
-      orderDateKey: orderDetails.orderDateKey,
-      customerName: String(orderDetails.customer.name).trim(),
-      customerEmail: String(orderDetails.customer.email).trim(),
-      customerPhone: String(orderDetails.customer.phone).trim(),
-      items: String(orderDetails.items).trim(),
-      total: Number(orderDetails.total),
+      orderId: String(currentOrder.orderId || "").trim(),
+      orderDateKey: String(currentOrder.orderDateKey || "").trim(),
+      customerName: String(currentOrder.customer?.name || "").trim(),
+      customerEmail: String(currentOrder.customer?.email || "").trim(),
+      customerPhone: String(currentOrder.customer?.phone || "").trim(),
+      // CRITICAL: items MUST be a string - validate explicitly
+      items: String(currentOrder.items || "").trim(),
+      total: Number(currentOrder.total || 0),
       timestamp: paidAt,
       status: "payment_verified",
+      // Debug: log the cartSnapshot for verification
+      _debugCartSnapshot: currentOrder.cartSnapshot,
     };
 
-    if (!orderSnapshot.items || orderSnapshot.items.length === 0) {
-      console.error('[ConfirmPayment] CRITICAL: Items corrupted!');
+    // CRITICAL: Validate EVERY required field before sending to backend
+    const validationErrors = [];
+    if (!orderSnapshot.orderId) validationErrors.push("Missing order ID");
+    if (!orderSnapshot.items || orderSnapshot.items.length === 0) validationErrors.push("Missing or empty items");
+    if (!orderSnapshot.customerName) validationErrors.push("Missing customer name");
+    if (!orderSnapshot.customerPhone) validationErrors.push("Missing customer phone");
+    if (orderSnapshot.total <= 0) validationErrors.push("Invalid total amount");
+    
+    if (validationErrors.length > 0) {
+      console.error('[ConfirmPayment] CRITICAL VALIDATION FAILURE:', { orderSnapshot, errors: validationErrors });
       setOrderDetails((previous) => ({
         ...previous,
         saving: false,
-        error: "Order items corrupted. Please try again.",
+        error: `Order validation failed: ${validationErrors.join(', ')}. Please try again.`,
       }));
       setIsSavingOrder(false);
       return;
     }
-    console.log('[ConfirmPayment] Submitting order:', { orderId: orderSnapshot.orderId, items: orderSnapshot.items });
+    
+    console.log('[ConfirmPayment] Submitting validated order snapshot:', { orderId: orderSnapshot.orderId, items: orderSnapshot.items, itemsLength: orderSnapshot.items.length, total: orderSnapshot.total });
 
     try {
+      console.log('[ConfirmPayment] Sending order to backend:', { orderId: orderSnapshot.orderId, items: orderSnapshot.items });
       const result = await appendOrderToSheet(orderSnapshot);
 
-      const canonicalOrderId = Number(result.orderId || orderDetails.orderId);
+      const canonicalOrderId = Number(result.orderId || currentOrder.orderId);
+      
+      // CRITICAL: Create new order state with immutable fields
       const nextOrder = {
-        ...orderDetails,
+        ...currentOrder,
         orderId: canonicalOrderId,
         paidAt,
         paymentMode: "upi",
@@ -724,17 +783,19 @@ function App() {
         error: null,
       };
 
-      if (canonicalOrderId !== Number(orderDetails.orderId)) {
-        replaceOrderIdForDate(orderDetails.orderDateKey, orderDetails.orderId, nextOrder);
+      if (canonicalOrderId !== Number(currentOrder.orderId)) {
+        replaceOrderIdForDate(currentOrder.orderDateKey, currentOrder.orderId, nextOrder);
       } else {
-        upsertOrderForDate(orderDetails.orderDateKey, nextOrder);
+        upsertOrderForDate(currentOrder.orderDateKey, nextOrder);
       }
 
       setOrderDetails(nextOrder);
-      setTodayOrders(readOrdersForDate(orderDetails.orderDateKey));
+      setTodayOrders(readOrdersForDate(currentOrder.orderDateKey));
       // Clear cart only after payment is confirmed
       setCartItems([]);
+      console.log('[ConfirmPayment] Order submitted successfully:', { orderId: canonicalOrderId, items: orderSnapshot.items });
     } catch (error) {
+      console.error('[ConfirmPayment] Failed to submit order:', { error: error?.message, orderSnapshot });
       setOrderDetails((previous) => ({
         ...previous,
         saving: false,
@@ -748,7 +809,9 @@ function App() {
   };
 
   const selectCashAtCounter = async () => {
-    if (!orderDetails) {
+    // CRITICAL: Capture orderDetails immediately to prevent stale closure issues
+    const currentOrder = orderDetails;
+    if (!currentOrder) {
       return;
     }
 
@@ -756,38 +819,54 @@ function App() {
     setIsSavingOrder(true);
 
     const cashTimestamp = new Date().toISOString();
+    
+    // CRITICAL: Build order snapshot with explicit validation of EVERY field
+    // Use currentOrder instead of orderDetails to avoid closure issues
     const orderSnapshot = {
-      orderId: orderDetails.orderId,
-      orderDateKey: orderDetails.orderDateKey,
-      customerName: String(orderDetails.customer.name).trim(),
-      customerEmail: String(orderDetails.customer.email).trim(),
-      customerPhone: String(orderDetails.customer.phone).trim(),
-      items: String(orderDetails.items).trim(),
-      total: Number(orderDetails.total),
+      orderId: String(currentOrder.orderId || "").trim(),
+      orderDateKey: String(currentOrder.orderDateKey || "").trim(),
+      customerName: String(currentOrder.customer?.name || "").trim(),
+      customerEmail: String(currentOrder.customer?.email || "").trim(),
+      customerPhone: String(currentOrder.customer?.phone || "").trim(),
+      // CRITICAL: items MUST be a string - validate explicitly
+      items: String(currentOrder.items || "").trim(),
+      total: Number(currentOrder.total || 0),
       timestamp: cashTimestamp,
       status: "pending_payment",
+      // Debug: log the cartSnapshot for verification
+      _debugCartSnapshot: currentOrder.cartSnapshot,
     };
 
-    // CRITICAL: Validate items haven't been corrupted
-    if (!orderSnapshot.items || orderSnapshot.items.length === 0) {
-      console.error('[CashAtCounter] CRITICAL: Items corrupted or empty!');
+    // CRITICAL: Validate EVERY required field before sending to backend
+    const validationErrors = [];
+    if (!orderSnapshot.orderId) validationErrors.push("Missing order ID");
+    if (!orderSnapshot.items || orderSnapshot.items.length === 0) validationErrors.push("Missing or empty items");
+    if (!orderSnapshot.customerName) validationErrors.push("Missing customer name");
+    if (!orderSnapshot.customerPhone) validationErrors.push("Missing customer phone");
+    if (orderSnapshot.total <= 0) validationErrors.push("Invalid total amount");
+    
+    if (validationErrors.length > 0) {
+      console.error('[CashAtCounter] CRITICAL VALIDATION FAILURE:', { orderSnapshot, errors: validationErrors });
       setOrderDetails((previous) => ({
         ...previous,
         saving: false,
-        error: "Order items corrupted. Please try again.",
+        error: `Order validation failed: ${validationErrors.join(', ')}. Please try again.`,
       }));
       setIsSavingOrder(false);
       return;
     }
 
-    console.log('[CashAtCounter] Submitting order:', { orderId: orderSnapshot.orderId, items: orderSnapshot.items });
+    console.log('[CashAtCounter] Submitting validated order snapshot:', { orderId: orderSnapshot.orderId, items: orderSnapshot.items, itemsLength: orderSnapshot.items.length, total: orderSnapshot.total });
 
     try {
+      console.log('[CashAtCounter] Sending order to backend:', { orderId: orderSnapshot.orderId, items: orderSnapshot.items });
       const result = await appendOrderToSheet(orderSnapshot);
 
-      const canonicalOrderId = Number(result.orderId || orderDetails.orderId);
+      const canonicalOrderId = Number(result.orderId || currentOrder.orderId);
+      
+      // CRITICAL: Create new order state with immutable fields
       const nextOrder = {
-        ...orderDetails,
+        ...currentOrder,
         orderId: canonicalOrderId,
         paymentMode: "cash_counter",
         status: "pending_payment",
@@ -795,17 +874,19 @@ function App() {
         error: null,
       };
 
-      if (canonicalOrderId !== Number(orderDetails.orderId)) {
-        replaceOrderIdForDate(orderDetails.orderDateKey, orderDetails.orderId, nextOrder);
+      if (canonicalOrderId !== Number(currentOrder.orderId)) {
+        replaceOrderIdForDate(currentOrder.orderDateKey, currentOrder.orderId, nextOrder);
       } else {
-        upsertOrderForDate(orderDetails.orderDateKey, nextOrder);
+        upsertOrderForDate(currentOrder.orderDateKey, nextOrder);
       }
 
       setOrderDetails(nextOrder);
-      setTodayOrders(readOrdersForDate(orderDetails.orderDateKey));
+      setTodayOrders(readOrdersForDate(currentOrder.orderDateKey));
       // Clear cart once the order is registered for cash payment at counter
       setCartItems([]);
+      console.log('[CashAtCounter] Order submitted successfully:', { orderId: canonicalOrderId, items: orderSnapshot.items });
     } catch (error) {
+      console.error('[CashAtCounter] Failed to submit order:', { error: error?.message, orderSnapshot });
       setOrderDetails((previous) => ({
         ...previous,
         saving: false,

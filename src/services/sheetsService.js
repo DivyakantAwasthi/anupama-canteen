@@ -1,4 +1,4 @@
-const ORDERS_API_URL = process.env.REACT_APP_ORDERS_API_URL;
+﻿const ORDERS_API_URL = process.env.REACT_APP_ORDERS_API_URL;
 const MENU_API_URL = process.env.REACT_APP_MENU_API_URL || "/api/menu";
 const APPEND_ORDER_ENDPOINT =
   process.env.REACT_APP_APPEND_ORDER_ENDPOINT || "/append-order";
@@ -382,16 +382,23 @@ const extractOrderId = (value) => {
   return extractOrderId(value.order) || extractOrderId(value.data) || extractOrderId(value.result);
 };
 
-const deepCloneOrder = (order) => {
-  if (!order || typeof order !== 'object') return order;
-  if (Array.isArray(order)) return order.map(deepCloneOrder);
-  const cloned = {};
-  for (const key in order) {
-    if (order.hasOwnProperty(key)) {
-      cloned[key] = deepCloneOrder(order[key]);
+// DEPRECATED: deepCloneOrder function replaced by safeCloneData
+// Kept as reference for backwards compatibility but not used
+// See safeCloneData function below for safe cloning with structuredClone support
+
+
+// CRITICAL: Safe clone function using structuredClone when available
+const safeCloneData = (data) => {
+  try {
+    // Try using structuredClone if available (handles more complex types)
+    if (typeof structuredClone === 'function') {
+      return structuredClone(data);
     }
+  } catch (e) {
+    // Fallback if structuredClone fails
   }
-  return cloned;
+  // Use JSON method as fallback for simple data structures
+  return JSON.parse(JSON.stringify(data));
 };
 
 const buildOrderPayload = ({
@@ -418,23 +425,42 @@ const buildOrderPayload = ({
     throw new Error('Order items cannot be empty. Data corruption detected.');
   }
 
-  // NEW: Validate items string contains expected format
+  // CRITICAL: Validate items string format and content
   if (!itemsStr.includes('x')) {
-    console.warn('[buildOrderPayload] WARNING: Items string might be malformed', {
+    console.warn('[buildOrderPayload] WARNING: Items string might be malformed - missing quantity indicator', {
       itemsStr,
       orderId,
     });
   }
+  
+  // CRITICAL: Validate items string does not contain suspicious patterns
+  const suspiciousPatterns = [/^\\s*x\\s*\\d+/i, /^\\s*\\d+\\s*$/];
+  if (suspiciousPatterns.some(pattern => pattern.test(itemsStr))) {
+    console.error('[buildOrderPayload] CRITICAL: Items string has suspicious format', { itemsStr, orderId });
+    throw new Error(`Invalid items format: "${itemsStr}". Expected format: "Item Name x Quantity".`);
+  }
+
+  // CRITICAL: Validate individual items from cartSnapshot
+  if (cartSnapshot && Array.isArray(cartSnapshot)) {
+    for (const item of cartSnapshot) {
+      if (!item.name || !String(item.name).trim()) {
+        throw new Error(`Cart item has empty name: ${JSON.stringify(item)}`);
+      }
+      if (!item.quantity || Number(item.quantity) <= 0) {
+        throw new Error(`Cart item has invalid quantity: ${JSON.stringify(item)}`);
+      }
+    }
+  }
 
   const payload = {
     action: ORDER_POST_ACTION,
-    orderId: String(orderId),
-    orderDate: orderDateKey,
+    orderId: String(orderId || "").trim(),
+    orderDate: String(orderDateKey || "").trim(),
     customerName: String(customerName || "").trim(),
     customerEmail: String(customerEmail || "").trim(),
     customerPhone: String(customerPhone || "").trim(),
     items: itemsStr,
-    total: Number(total).toFixed(2),
+    total: Number(total || 0).toFixed(2),
     timestamp: String(timestamp || "").trim(),
     status: String(status || "").trim(),
     name: String(customerName || "").trim(),
@@ -442,25 +468,50 @@ const buildOrderPayload = ({
     phone: String(customerPhone || "").trim(),
   };
   
+  // CRITICAL: Validate payload before returning
+  if (!payload.orderId) {
+    throw new Error('Payload validation failed: missing orderId');
+  }
+  if (!payload.items) {
+    throw new Error('Payload validation failed: missing items');
+  }
+  
   console.log('[buildOrderPayload] Creating payload:', {
     orderId: payload.orderId,
     items: payload.items,
     status: payload.status,
     total: payload.total,
     cartSnapshotLength: cartSnapshot?.length,
+    payloadJson: JSON.stringify(payload),
   });
   
-  return deepCloneOrder(payload);
+  // CRITICAL: Deep clone payload using safe method for maximum safety
+  const clonedPayload = safeCloneData(payload);
+  return clonedPayload;
 };
 
 export async function appendOrderToSheet(orderData) {
-  const clonedData = deepCloneOrder(orderData);
+  // CRITICAL: Use safe clone for maximum safety
+  const clonedData = safeCloneData(orderData);
+  
+  // CRITICAL: Validate cloned data before building payload
+  if (!clonedData || !clonedData.items) {
+    console.error('[appendOrderToSheet] CRITICAL: Cloned data is invalid', { orderData, clonedData });
+    throw new Error('Order data validation failed after cloning');
+  }
+  
   const payload = buildOrderPayload(clonedData);
   const attempts = [];
   
-  if (typeof window !== 'undefined' && window.location.pathname.includes('kitchen')) {
-    console.log('[OrderDebug] appendOrderToSheet called:', { orderId: payload.orderId, items: payload.items, status: payload.status });
-  }
+  // CRITICAL: Log the exact payload being sent
+  console.log('[appendOrderToSheet] Sending order to API:', {
+    orderId: payload.orderId,
+    items: payload.items,
+    status: payload.status,
+    total: payload.total,
+    customerName: payload.customerName,
+    payloadSnapshot: JSON.stringify(payload),
+  });
 
   const proxyRequest = async () => {
     const response = await fetch(APPEND_ORDER_ENDPOINT, {
@@ -682,3 +733,5 @@ export async function fetchOrderStatusFromSheet({ orderDateKey, orderId }) {
 
   throw new Error("Unable to fetch order status right now.");
 }
+
+

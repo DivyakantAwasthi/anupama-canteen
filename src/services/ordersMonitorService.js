@@ -186,6 +186,19 @@ export async function updateKitchenOrderStatus({ orderId, status, timestamp, pas
   }
 
   // Proceed with update only if verification passed
+  // CRITICAL: Send UPDATE action explicitly, never APPEND
+  const normalizedStatus = normalizeStatus(status);
+  const updatePayload = {
+    orderId: String(orderId).trim(),
+    status: normalizedStatus,
+    timestamp: String(timestamp || "").trim(),
+    orderDate: String(orderDate || "").trim(),
+    action: "updateOrderStatus",  // CRITICAL: Explicit update action
+    source: "kitchen_panel",        // Track origin
+  };
+  
+  console.log('[StatusUpdate] Sending update payload:', { payload: JSON.stringify(updatePayload) });
+
   const response = await fetch(MONITOR_ENDPOINT, {
     method: "POST",
     headers: {
@@ -193,18 +206,21 @@ export async function updateKitchenOrderStatus({ orderId, status, timestamp, pas
       Accept: "application/json",
       ...(password ? { "x-monitor-password": password } : {}),
     },
-    body: JSON.stringify({
-      orderId,
-      status,
-      timestamp,
-      orderDate,
-    }),
+    body: JSON.stringify(updatePayload),
   });
 
   const payload = await readJson(response);
+  
+  if (!response.ok) {
+    console.error('[StatusUpdate] Update failed:', { status: response.status, payload });
+    throw new Error(payload?.error || `Update failed with status ${response.status}`);
+  }
+  
+  console.log('[StatusUpdate] Update successful:', { orderId: String(payload.orderId || orderId), status: normalizedStatus });
+  
   return {
     orderId: String(payload.orderId || orderId),
-    status: normalizeStatus(payload.status || status),
+    status: normalizeStatus(payload.status || normalizedStatus),
   };
 }
 
