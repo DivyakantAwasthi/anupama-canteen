@@ -7,7 +7,14 @@ import {
   useMemo,
   useState,
 } from "react";
-import { FiMapPin, FiPhoneCall, FiShield } from "react-icons/fi";
+import {
+  FiCheckCircle,
+  FiExternalLink,
+  FiMail,
+  FiMapPin,
+  FiPhoneCall,
+} from "react-icons/fi";
+import { FaFacebookF, FaInstagram, FaWhatsapp } from "react-icons/fa";
 import Menu from "./components/Menu";
 import Cart from "./components/Cart";
 import KitchenMonitor from "./components/KitchenMonitor";
@@ -41,6 +48,30 @@ const STATUS_COPY = {
   delivered: "Delivered",
   cancelled: "Cancelled",
 };
+
+const FOOTER_TRUST_BADGES = [
+  "Serving Since 2010",
+  "Freshly Prepared Daily",
+  "Hygienic Kitchen",
+  "Local Lucknow Brand",
+];
+
+const FOOTER_QUICK_LINKS = [
+  { label: "Browse Menu", href: "#menu-section" },
+  { label: "Track Order", href: "#track-order" },
+  { label: "Order Status", href: "#track-order" },
+  { label: "Contact Us", href: "#contact-us" },
+  { label: "WhatsApp Order", href: SITE_CONTENT.whatsappLink, isExternal: true },
+];
+
+const FOOTER_SUPPORT_LINKS = [
+  { label: "Contact Us", href: "#contact-us" },
+  { label: "Order Issues", href: SITE_CONTENT.whatsappLink, isExternal: true },
+  { label: "Refund & Cancellation Policy", href: SITE_CONTENT.whatsappLink, isExternal: true },
+  { label: "Delivery Information", href: SITE_CONTENT.whatsappLink, isExternal: true },
+  { label: "FAQs", href: SITE_CONTENT.whatsappLink, isExternal: true },
+  { label: "Grievance Redressal", href: SITE_CONTENT.emailLink },
+];
 
 const ALL_CATEGORY = "All";
 
@@ -250,6 +281,7 @@ function App() {
   const [trackingError, setTrackingError] = useState("");
   const [cartBadgeAnimating, setCartBadgeAnimating] = useState(false);
   const [addToCartToast, setAddToCartToast] = useState(null);
+  const [isFooterInView, setIsFooterInView] = useState(false);
 
   const popularItemIds = useMemo(() => {
     const counts = new Map();
@@ -366,10 +398,38 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const hash = window.location.hash.replace("#", "");
+    if (!hash) {
+      return undefined;
+    }
+
+    const scrollTimer = window.requestAnimationFrame(() => {
+      document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+
+    return () => window.cancelAnimationFrame(scrollTimer);
+  }, []);
+
+  useEffect(() => {
     const syncOrders = () => setTodayOrders(readOrdersForDate(getTodayKey()));
     syncOrders();
     const intervalId = setInterval(syncOrders, 30000);
     return () => clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
+    const footer = document.getElementById("contact-us");
+    if (!footer || !("IntersectionObserver" in window)) {
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsFooterInView(entry.isIntersecting),
+      { rootMargin: "0px 0px -10% 0px", threshold: 0.05 }
+    );
+
+    observer.observe(footer);
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -989,6 +1049,24 @@ function App() {
     return <CustomerDisplay />;
   }
 
+  const footerSocialLinks = [
+    {
+      label: "WhatsApp",
+      href: SITE_CONTENT.socialLinks.whatsapp,
+      icon: <FaWhatsapp />,
+    },
+    {
+      label: "Instagram",
+      href: SITE_CONTENT.socialLinks.instagram,
+      icon: <FaInstagram />,
+    },
+    {
+      label: "Facebook",
+      href: SITE_CONTENT.socialLinks.facebook,
+      icon: <FaFacebookF />,
+    },
+  ].filter((link) => link.href);
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -1112,7 +1190,7 @@ function App() {
           ))}
         </section>
 
-        <div className="content-grid">
+        <div className="content-grid" id="menu-section">
           <div className="content-main">
             <Menu
               items={filteredMenu}
@@ -1164,7 +1242,7 @@ function App() {
               callLink={SITE_CONTENT.callLink}
             />
 
-            <section className="side-panel">
+            <section className="side-panel" id="track-order">
               <div className="section-heading">
                 <div>
                   <p className="eyebrow">Track order</p>
@@ -1229,71 +1307,149 @@ function App() {
         </div>
       </main>
 
-      <footer className="site-footer">
+      <footer className="site-footer" id="contact-us">
         <div className="site-footer-inner">
-          <div className="site-footer-brand">
-            <p className="eyebrow">Serving since {SITE_CONTENT.since}</p>
-            <h2>{SITE_CONTENT.name}</h2>
+          <section className="footer-column footer-about" aria-labelledby="footer-about-heading">
+            <h2 id="footer-about-heading">About Anupama Canteen</h2>
             <p>
-              Fresh snacks, tea-time favourites, and quick meals for Lucknow customers who
-              want fast ordering with real local trust.
+              Serving Lucknow since 2010, Anupama Canteen offers fresh snacks, tea-time
+              favourites, and quick meals prepared with care. Built on decades of hospitality
+              and food-service experience, we focus on hygiene, consistency, and authentic taste.
             </p>
-          </div>
+            <ul className="footer-trust-list" aria-label="Anupama Canteen trust badges">
+              {FOOTER_TRUST_BADGES.map((badge) => (
+                <li key={badge}>
+                  <FiCheckCircle aria-hidden="true" />
+                  <span>{badge}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
 
-          <div className="site-footer-grid">
-            <a
-              className="footer-detail-card"
-              href={SITE_CONTENT.mapsLink}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <span className="footer-icon" aria-hidden="true">
-                <FiMapPin />
-              </span>
-              <div>
-                <span>Address</span>
-                <strong>{SITE_CONTENT.address}</strong>
-              </div>
-            </a>
-            <a className="footer-detail-card" href={SITE_CONTENT.callLink}>
-              <span className="footer-icon" aria-hidden="true">
-                <FiPhoneCall />
-              </span>
-              <div>
-                <span>Phone</span>
-                <strong>{SITE_CONTENT.displayPhone}</strong>
-              </div>
-            </a>
-            <div className="footer-detail-card">
-              <span className="footer-icon" aria-hidden="true">
-                <FiShield />
-              </span>
-              <div>
-                <span>FSSAI Number</span>
-                <strong>{SITE_CONTENT.fssaiNumber}</strong>
-              </div>
-            </div>
-          </div>
+          <nav className="footer-column" aria-labelledby="footer-quick-links-heading">
+            <h2 id="footer-quick-links-heading">Quick Links</h2>
+            <ul className="footer-link-list">
+              {FOOTER_QUICK_LINKS.map((link) => (
+                <li key={link.label}>
+                  <a
+                    href={link.href}
+                    target={link.isExternal ? "_blank" : undefined}
+                    rel={link.isExternal ? "noreferrer" : undefined}
+                    onClick={
+                      link.label === "WhatsApp Order"
+                        ? () => trackEvent("whatsapp_cta_click", { label: "footer_quick_link" })
+                        : undefined
+                    }
+                  >
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
 
-          <div className="site-footer-actions">
-            <a href={SITE_CONTENT.callLink} className="soft-btn">
-              Call now
-            </a>
-            <a
-              href={SITE_CONTENT.whatsappLink}
-              target="_blank"
-              rel="noreferrer"
-              className="primary-btn"
-              onClick={() => trackEvent("whatsapp_cta_click", { label: "footer" })}
-            >
-              WhatsApp order
-            </a>
-          </div>
+          <nav className="footer-column" aria-labelledby="footer-support-heading">
+            <h2 id="footer-support-heading">Support &amp; Help</h2>
+            <ul className="footer-link-list">
+              {FOOTER_SUPPORT_LINKS.map((link) => (
+                <li key={link.label}>
+                  <a
+                    href={link.href}
+                    target={link.isExternal ? "_blank" : undefined}
+                    rel={link.isExternal ? "noreferrer" : undefined}
+                  >
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+            <p className="footer-support-note">
+              For any order issues or payment concerns, contact us on WhatsApp or call directly.
+            </p>
+          </nav>
+
+          <section className="footer-column footer-contact" aria-labelledby="footer-contact-heading">
+            <h2 id="footer-contact-heading">Contact Us</h2>
+            <address>
+              <a className="footer-contact-link" href={SITE_CONTENT.callLink}>
+                <FiPhoneCall aria-hidden="true" />
+                <span>{SITE_CONTENT.displayPhone}</span>
+              </a>
+              <a className="footer-contact-link" href={SITE_CONTENT.emailLink}>
+                <FiMail aria-hidden="true" />
+                <span>{SITE_CONTENT.email}</span>
+              </a>
+              <a
+                className="footer-contact-link"
+                href={SITE_CONTENT.mapsLink}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <FiMapPin aria-hidden="true" />
+                <span>
+                  Anupama Canteen
+                  <br />
+                  Ghaila Road
+                  <br />
+                  Lucknow
+                </span>
+              </a>
+              <a
+                className="footer-contact-link"
+                href={SITE_CONTENT.mapsLink}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <FiExternalLink aria-hidden="true" />
+                <span>Open in Google Maps</span>
+              </a>
+            </address>
+
+            {footerSocialLinks.length ? (
+              <div className="footer-socials" aria-label="Anupama Canteen social links">
+                {footerSocialLinks.map((link) => (
+                  <a
+                    key={link.label}
+                    href={link.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={link.label}
+                    title={link.label}
+                  >
+                    {link.icon}
+                  </a>
+                ))}
+              </div>
+            ) : null}
+          </section>
+        </div>
+
+        <div className="site-footer-cta">
+          <a
+            href={SITE_CONTENT.whatsappLink}
+            target="_blank"
+            rel="noreferrer"
+            className="primary-btn"
+            onClick={() => trackEvent("whatsapp_cta_click", { label: "footer_order_button" })}
+          >
+            Order on WhatsApp
+          </a>
+          <a href={SITE_CONTENT.callLink} className="soft-btn">
+            Call Now
+          </a>
+        </div>
+
+        <div className="site-footer-bottom">
+          <p>&copy; 2026 Anupama Canteen</p>
+          <p>Serving Lucknow with fresh snacks and quick meals.</p>
+          <p>
+            <span>FSSAI No:</span> {SITE_CONTENT.fssaiNumber}
+          </p>
         </div>
       </footer>
 
       {/* Fixed UI Overlap: Grouped mobile triggers into a managed container */}
-      <div className="mobile-sticky-controls">
+      <div className={`mobile-sticky-controls ${isFooterInView ? "is-footer-visible" : ""}`}>
         <button
           type="button"
           className={`mobile-cart-trigger ${totalUnits ? "has-items" : ""} ${cartBadgeAnimating ? "badge-animate" : ""}`}

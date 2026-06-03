@@ -11,6 +11,11 @@ const DISPLAY_PHONE =
 const MAPS_LINK = String(
   process.env.REACT_APP_GOOGLE_MAPS_URL || "https://g.page/r/CSEAz_a6ceGfECI"
 ).trim();
+const BUSINESS_EMAIL = String(
+  process.env.REACT_APP_BUSINESS_EMAIL || "anupama.canteen@gmail.com"
+).trim();
+const INSTAGRAM_LINK = String(process.env.REACT_APP_INSTAGRAM_URL || "").trim();
+const FACEBOOK_LINK = String(process.env.REACT_APP_FACEBOOK_URL || "").trim();
 
 // WhatsApp Catalog link (no pre-filled message)
 export const WHATSAPP_CATALOG_LINK = `https://wa.me/c/91${SANITIZED_PHONE}`;
@@ -22,9 +27,16 @@ export const SITE_CONTENT = {
   serviceArea: "Local pickup and quick delivery across Lucknow",
   phone: SANITIZED_PHONE,
   displayPhone: DISPLAY_PHONE,
+  email: BUSINESS_EMAIL,
+  emailLink: `mailto:${BUSINESS_EMAIL}`,
   callLink: `tel:+91${SANITIZED_PHONE}`,
   mapsLink: MAPS_LINK,
   whatsappLink: WHATSAPP_CATALOG_LINK,
+  socialLinks: {
+    whatsapp: WHATSAPP_CATALOG_LINK,
+    instagram: INSTAGRAM_LINK,
+    facebook: FACEBOOK_LINK,
+  },
   fssaiNumber: process.env.REACT_APP_FSSAI_NUMBER || "22726739000468",
   address:
     process.env.REACT_APP_BUSINESS_ADDRESS ||
