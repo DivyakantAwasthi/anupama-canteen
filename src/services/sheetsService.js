@@ -1,4 +1,4 @@
-﻿const ORDERS_API_URL = process.env.REACT_APP_ORDERS_API_URL;
+const ORDERS_API_URL = process.env.REACT_APP_ORDERS_API_URL;
 const MENU_API_URL = process.env.REACT_APP_MENU_API_URL || "/api/menu";
 const APPEND_ORDER_ENDPOINT =
   process.env.REACT_APP_APPEND_ORDER_ENDPOINT || "/append-order";

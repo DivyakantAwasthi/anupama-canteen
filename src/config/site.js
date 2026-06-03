@@ -1,4 +1,4 @@
-const BUSINESS_PHONE = String(process.env.REACT_APP_BUSINESS_PHONE || "9838383231").trim();
+const BUSINESS_PHONE = String(process.env.REACT_APP_BUSINESS_PHONE || "98383 83231").trim();
 const RAW_PHONE_DIGITS = BUSINESS_PHONE.replace(/\D/g, "");
 const SANITIZED_PHONE =
   RAW_PHONE_DIGITS.length === 12 && RAW_PHONE_DIGITS.startsWith("91")
@@ -14,8 +14,12 @@ const MAPS_LINK = String(
 const BUSINESS_EMAIL = String(
   process.env.REACT_APP_BUSINESS_EMAIL || "anupama.canteen@gmail.com"
 ).trim();
-const INSTAGRAM_LINK = String(process.env.REACT_APP_INSTAGRAM_URL || "").trim();
-const FACEBOOK_LINK = String(process.env.REACT_APP_FACEBOOK_URL || "").trim();
+const INSTAGRAM_LINK = String(
+  process.env.REACT_APP_INSTAGRAM_URL || "https://www.instagram.com/anupamacanteen/"
+).trim();
+const FACEBOOK_LINK = String(
+  process.env.REACT_APP_FACEBOOK_URL || "https://www.facebook.com/profile.php?id=61588368243036"
+).trim();
 
 // WhatsApp Catalog link (no pre-filled message)
 export const WHATSAPP_CATALOG_LINK = `https://wa.me/c/91${SANITIZED_PHONE}`;

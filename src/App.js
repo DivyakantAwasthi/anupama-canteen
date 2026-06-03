@@ -1404,9 +1404,13 @@ function App() {
                 <span>Open in Google Maps</span>
               </a>
             </address>
+          </section>
 
+          <section className="footer-column footer-follow" aria-labelledby="footer-follow-heading">
+            <h2 id="footer-follow-heading">Follow Us</h2>
+            <p className="footer-follow-tagline">See our latest dishes and updates on Instagram</p>
             {footerSocialLinks.length ? (
-              <div className="footer-socials" aria-label="Anupama Canteen social links">
+              <div className="footer-socials footer-socials-vertical" aria-label="Anupama Canteen social links">
                 {footerSocialLinks.map((link) => (
                   <a
                     key={link.label}
@@ -1415,13 +1419,18 @@ function App() {
                     rel="noreferrer"
                     aria-label={link.label}
                     title={link.label}
+                    className={`footer-social-link ${link.label.toLowerCase()}`}
+                    onClick={() => trackEvent("social_link_click", { platform: link.label.toLowerCase(), location: "footer_follow" })}
                   >
                     {link.icon}
+                    <span className="social-label">{link.label}</span>
+                    {link.label === "Instagram" && <span className="instagram-handle">@anupamacanteen</span>}
                   </a>
                 ))}
               </div>
             ) : null}
           </section>
+        
         </div>
 
         <div className="site-footer-cta">
