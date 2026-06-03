@@ -1368,67 +1368,68 @@ function App() {
             </p>
           </nav>
 
-          <section className="footer-column footer-contact" aria-labelledby="footer-contact-heading">
-            <h2 id="footer-contact-heading">Contact Us</h2>
-            <address>
-              <a className="footer-contact-link" href={SITE_CONTENT.callLink}>
-                <FiPhoneCall aria-hidden="true" />
-                <span>{SITE_CONTENT.displayPhone}</span>
-              </a>
-              <a className="footer-contact-link" href={SITE_CONTENT.emailLink}>
-                <FiMail aria-hidden="true" />
-                <span>{SITE_CONTENT.email}</span>
-              </a>
-              <a
-                className="footer-contact-link"
-                href={SITE_CONTENT.mapsLink}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <FiMapPin aria-hidden="true" />
-                <span>
-                  Anupama Canteen
-                  <br />
-                  Ghaila Road
-                  <br />
-                  Lucknow
-                </span>
-              </a>
-              <a
-                className="footer-contact-link"
-                href={SITE_CONTENT.mapsLink}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <FiExternalLink aria-hidden="true" />
-                <span>Open in Google Maps</span>
-              </a>
-            </address>
-          </section>
+          <section className="footer-contact-social" aria-labelledby="footer-contact-heading">
+            <div className="contact-column">
+              <h2 id="footer-contact-heading">Contact Us</h2>
+              <address className="contact-list">
+                <a className="contact-item" href={SITE_CONTENT.callLink} aria-label={`Call ${SITE_CONTENT.displayPhone}`}>
+                  <FiPhoneCall className="contact-icon" aria-hidden="true" />
+                  <div className="contact-info">
+                    <span className="contact-label">Phone</span>
+                    <span className="contact-value">{SITE_CONTENT.displayPhone}</span>
+                  </div>
+                </a>
+                <a className="contact-item" href={SITE_CONTENT.emailLink} aria-label={`Email ${SITE_CONTENT.email}`}>
+                  <FiMail className="contact-icon" aria-hidden="true" />
+                  <div className="contact-info">
+                    <span className="contact-label">Email</span>
+                    <span className="contact-value">{SITE_CONTENT.email}</span>
+                  </div>
+                </a>
+                <a className="contact-item" href={SITE_CONTENT.mapsLink} target="_blank" rel="noreferrer" aria-label="Anupama Canteen Address">
+                  <FiMapPin className="contact-icon" aria-hidden="true" />
+                  <div className="contact-info">
+                    <span className="contact-label">Address</span>
+                    <span className="contact-value">Anupama Canteen, Ghaila Road, Lucknow</span>
+                  </div>
+                </a>
+                <a className="contact-item" href={SITE_CONTENT.mapsLink} target="_blank" rel="noreferrer" aria-label="Open in Google Maps">
+                  <FiExternalLink className="contact-icon" aria-hidden="true" />
+                  <div className="contact-info">
+                    <span className="contact-label">Maps</span>
+                    <span className="contact-value">Open in Google Maps</span>
+                  </div>
+                </a>
+              </address>
+            </div>
 
-          <section className="footer-column footer-follow" aria-labelledby="footer-follow-heading">
-            <h2 id="footer-follow-heading">Follow Us</h2>
-            <p className="footer-follow-tagline">See our latest dishes and updates on Instagram</p>
-            {footerSocialLinks.length ? (
-              <div className="footer-socials footer-socials-vertical" aria-label="Anupama Canteen social links">
-                {footerSocialLinks.map((link) => (
-                  <a
-                    key={link.label}
-                    href={link.href}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label={link.label}
-                    title={link.label}
-                    className={`footer-social-link ${link.label.toLowerCase()}`}
-                    onClick={() => trackEvent("social_link_click", { platform: link.label.toLowerCase(), location: "footer_follow" })}
-                  >
-                    {link.icon}
-                    <span className="social-label">{link.label}</span>
-                    {link.label === "Instagram" && <span className="instagram-handle">@anupamacanteen</span>}
-                  </a>
-                ))}
+            <div className="social-column">
+              <div className="social-header">
+                <h2 id="footer-follow-heading">Follow Us</h2>
+                <div className="social-divider"></div>
               </div>
-            ) : null}
+              {footerSocialLinks.length ? (
+                <div className="social-list" aria-label="Anupama Canteen social links">
+                  {footerSocialLinks.map((link) => (
+                    <a
+                      key={link.label}
+                      href={link.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={link.label}
+                      className={`social-item ${link.label.toLowerCase()}`}
+                      onClick={() => trackEvent("social_link_click", { platform: link.label.toLowerCase(), location: "footer_follow" })}
+                    >
+                      <div className="social-icon-wrapper">{link.icon}</div>
+                      <div className="social-content">
+                        <span className="social-name">{link.label}</span>
+                        {link.label === "Instagram" && <span className="social-handle">@anupamacanteen</span>}
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           </section>
         
         </div>
