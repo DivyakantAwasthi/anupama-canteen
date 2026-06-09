@@ -356,23 +356,30 @@ function updateOrderStatus_(params) {
   const orderId = String(params.orderId || params.id || '').trim();
   const status = normalizeStatus_(params.status || params.orderStatus);
   const date = normalizeDate_(params.orderDate || params.date || '');
-  console.log('[AppsScript:updateOrderStatus] Received request', { orderId: orderId, status: status, date: date });
+  const timestamp = normalizeTimestamp_(params.timestamp || new Date());
+  console.log('[AppsScript:updateOrderStatus] Received request', { orderId: orderId, status: status, date: date, timestamp: timestamp });
   if (!orderId || !status) throw new Error('invalid_status_payload');
 
-  const found = findOrderRow_(orderId, date);
-  if (!found) {
-    console.log('[AppsScript:updateOrderStatus] Order row not found', { orderId: orderId, date: date });
-    return { ok: false, error: 'order_not_found', orderId: orderId };
+  let found = findOrderRow_(orderId, date);
+  if (!found && date) {
+    console.log('[AppsScript:updateOrderStatus] Exact date match failed, falling back to orderId-only lookup', { orderId: orderId, date: date });
+    found = findOrderRow_(orderId, '');
   }
 
-  console.log('[AppsScript:updateOrderStatus] Updating sheet row', { rowIndex: found.rowIndex, orderId: orderId, status: status });
+  if (!found) {
+    console.log('[AppsScript:updateOrderStatus] Order row not found', { orderId: orderId, date: date });
+    return { ok: false, success: false, message: 'Order not found', orderId: orderId };
+  }
+
+  console.log('[AppsScript:updateOrderStatus] Updating sheet row', { rowIndex: found.rowIndex, orderId: orderId, status: status, timestamp: timestamp });
   found.sheet.getRange(found.rowIndex, 8).setValue(status);
+  found.sheet.getRange(found.rowIndex, 9).setValue(timestamp);
   applyOrderSheetFormatting_(found.sheet);
   updateDashboardAndAnalytics_();
   rebuildAdminSheet_();
 
-  console.log('[AppsScript:updateOrderStatus] Update completed', { rowIndex: found.rowIndex, orderId: orderId, status: status });
-  return { ok: true, orderId: orderId, status: status };
+  console.log('[AppsScript:updateOrderStatus] Update completed', { rowIndex: found.rowIndex, orderId: orderId, status: status, timestamp: timestamp });
+  return { ok: true, success: true, orderId: orderId, status: status, timestamp: timestamp };
 }
 
 function findOrderRow_(orderId, orderDate) {

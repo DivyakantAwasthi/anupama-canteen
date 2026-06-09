@@ -149,10 +149,10 @@ const handler = async (req, res) => {
     }
 
     console.log("[UpdateOrderStatus] Google Apps Script response", { responsePayload });
-    return res.status(200).json({ ok: true, orderId: String(orderId).trim(), status: normalizedStatus });
+    return res.status(200).json({ ok: true, success: true, orderId: String(orderId).trim(), status: normalizedStatus });
   } catch (error) {
     console.error("[UpdateOrderStatus] Proxy failed", { error: String(error) });
-    return res.status(502).json({ error: "status_update_failed", detail: String(error) });
+    return res.status(502).json({ ok: false, success: false, error: "status_update_failed", detail: String(error) });
   }
 };
 

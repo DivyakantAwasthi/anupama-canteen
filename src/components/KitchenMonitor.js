@@ -227,8 +227,9 @@ function KitchenMonitor() {
     );
     console.log('[KitchenMonitor] Updating status from kitchen panel', {
       orderId: targetOrder.orderId,
+      oldStatus: targetOrder.status,
+      newStatus: status,
       orderDate: targetOrder.orderDate,
-      status,
     });
 
     try {

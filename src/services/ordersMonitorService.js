@@ -64,7 +64,7 @@ export const getIndiaDateKey = (value = new Date()) => {
 };
 
 const getMonitorOrderKey = (order) =>
-  String(`${order?.orderDate || ""}:${order?.orderId || ""}`).trim();
+  String(order?.orderId || "").trim();
 
 export const normalizeMonitorOrder = (order) => ({
   orderId: String(order?.orderId || "").trim(),
