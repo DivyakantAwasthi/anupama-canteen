@@ -1,4 +1,5 @@
 const MONITOR_ENDPOINT = process.env.REACT_APP_ORDERS_MONITOR_ENDPOINT || "/api/orders-monitor";
+const UPDATE_STATUS_ENDPOINT = "/api/update-order-status";
 const POLL_INTERVAL_MS = Number(process.env.REACT_APP_KITCHEN_POLL_MS || 7000);
 const INDIA_TIME_ZONE = "Asia/Kolkata";
 
@@ -154,73 +155,45 @@ export async function fetchKitchenOrders({ date, password, signal } = {}) {
   return sortNewestFirst(uniqueOrders);
 }
 
-export async function updateKitchenOrderStatus({ orderId, status, timestamp, password }) {
-  const orderDate = String(timestamp || "").slice(0, 10);
-  
-  // CRITICAL: Verify order exists before attempting update
-  console.log('[StatusUpdate] Verifying order exists:', { orderId, orderDate });
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-    
-    try {
-      const existing = await fetchKitchenOrders({ 
-        date: orderDate, 
-        password, 
-        signal: controller.signal
-      });
-      
-      const orderExists = existing.some(o => String(o.orderId) === String(orderId));
-      if (!orderExists) {
-        console.log('[StatusUpdate] Order not found in sheet, rejecting update:', { orderId, orderDate });
-        throw new Error(`Order #${orderId} not found in system. It may have been deleted.`);
-      }
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  } catch (checkError) {
-    if (checkError.message?.includes('not found')) {
-      throw checkError;
-    }
-    console.warn('[StatusUpdate] Existence check failed, proceeding cautiously:', checkError?.message);
-  }
-
-  // Proceed with update only if verification passed
-  // CRITICAL: Send UPDATE action explicitly, never APPEND
+export async function updateKitchenOrderStatus({ orderId, status, orderDate, timestamp, password }) {
   const normalizedStatus = normalizeStatus(status);
-  const updatePayload = {
+  const payload = {
     orderId: String(orderId).trim(),
     status: normalizedStatus,
+    orderDate: String(orderDate || String(timestamp || "").slice(0, 10)).trim(),
     timestamp: String(timestamp || "").trim(),
-    orderDate: String(orderDate || "").trim(),
-    action: "updateOrderStatus",  // CRITICAL: Explicit update action
-    source: "kitchen_panel",        // Track origin
+    source: "kitchen_panel",
   };
-  
-  console.log('[StatusUpdate] Sending update payload:', { payload: JSON.stringify(updatePayload) });
 
-  const response = await fetch(MONITOR_ENDPOINT, {
+  console.log('[StatusUpdate] Sending update request to /api/update-order-status', {
+    payload,
+    endpoint: UPDATE_STATUS_ENDPOINT,
+  });
+
+  const response = await fetch(UPDATE_STATUS_ENDPOINT, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
       ...(password ? { "x-monitor-password": password } : {}),
     },
-    body: JSON.stringify(updatePayload),
+    body: JSON.stringify(payload),
   });
 
-  const payload = await readJson(response);
-  
+  const responsePayload = await readJson(response);
   if (!response.ok) {
-    console.error('[StatusUpdate] Update failed:', { status: response.status, payload });
-    throw new Error(payload?.error || `Update failed with status ${response.status}`);
+    console.error('[StatusUpdate] Update failed:', { status: response.status, responsePayload });
+    throw new Error(responsePayload?.error || `Update failed with status ${response.status}`);
   }
-  
-  console.log('[StatusUpdate] Update successful:', { orderId: String(payload.orderId || orderId), status: normalizedStatus });
-  
+
+  console.log('[StatusUpdate] Update succeeded', {
+    orderId: String(responsePayload.orderId || orderId),
+    status: normalizeStatus(responsePayload.status || normalizedStatus),
+  });
+
   return {
-    orderId: String(payload.orderId || orderId),
-    status: normalizeStatus(payload.status || normalizedStatus),
+    orderId: String(responsePayload.orderId || orderId),
+    status: normalizeStatus(responsePayload.status || normalizedStatus),
   };
 }
 

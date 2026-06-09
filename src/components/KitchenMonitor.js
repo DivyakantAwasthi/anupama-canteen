@@ -225,9 +225,16 @@ function KitchenMonitor() {
         order.orderId === targetOrder.orderId ? { ...order, status } : order
       )
     );
+    console.log('[KitchenMonitor] Updating status from kitchen panel', {
+      orderId: targetOrder.orderId,
+      orderDate: targetOrder.orderDate,
+      status,
+    });
+
     try {
       await updateKitchenOrderStatus({
         orderId: targetOrder.orderId,
+        orderDate: targetOrder.orderDate,
         timestamp: targetOrder.timestamp,
         status,
         password,
