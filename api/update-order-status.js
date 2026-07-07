@@ -82,6 +82,35 @@ const fetchJson = async (url, options = {}, timeoutMs = 10000) => {
   }
 };
 
+const assertUpstreamCanUpdateStatus = async () => {
+  const probeUrl = new URL(ORDERS_API_URL);
+  probeUrl.searchParams.set("action", "updateOrderStatus");
+  probeUrl.searchParams.set("orderId", "__STATUS_UPDATE_CAPABILITY_PROBE__");
+  probeUrl.searchParams.set("id", "__STATUS_UPDATE_CAPABILITY_PROBE__");
+  probeUrl.searchParams.set("status", "preparing");
+  probeUrl.searchParams.set("orderStatus", "preparing");
+  probeUrl.searchParams.set("date", "2099-01-01");
+  probeUrl.searchParams.set("orderDate", "2099-01-01");
+
+  const payload = await fetchJson(probeUrl.toString(), {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  }, 10000);
+
+  const action = String(payload?.action || "").toLowerCase();
+  const message = String(payload?.message || payload?.error || "").toLowerCase();
+
+  if (action.includes("append") || message.includes("unsupported action")) {
+    throw new Error("upstream_status_update_not_supported");
+  }
+
+  if (payload?.ok === false && action !== "updateorderstatus" && !message.includes("order not found")) {
+    throw new Error(payload?.error || payload?.message || "upstream_status_update_probe_failed");
+  }
+
+  return true;
+};
+
 const assertAuthorized = (req, res) => {
   if (!MONITOR_PASSWORD) {
     return true;
@@ -133,6 +162,8 @@ const handler = async (req, res) => {
   console.log("[UpdateOrderStatus] Received request", { payload });
 
   try {
+    await assertUpstreamCanUpdateStatus();
+
     const responsePayload = await fetchJson(ORDERS_API_URL, {
       method: "POST",
       headers: {
@@ -141,6 +172,16 @@ const handler = async (req, res) => {
       },
       body: JSON.stringify(payload),
     }, 10000);
+
+    if (String(responsePayload?.action || '').toLowerCase().includes('append')) {
+      console.error("[UpdateOrderStatus] Invalid update response returned append action", { responsePayload });
+      return res.status(502).json({
+        ok: false,
+        success: false,
+        error: "update_fallback_to_append",
+        detail: responsePayload,
+      });
+    }
 
     if (responsePayload?.ok === false || responsePayload?.success === false || responsePayload?.error) {
       const errorMessage = responsePayload.error || responsePayload.message || "update_failed";
@@ -152,6 +193,14 @@ const handler = async (req, res) => {
     return res.status(200).json({ ok: true, success: true, orderId: String(orderId).trim(), status: normalizedStatus });
   } catch (error) {
     console.error("[UpdateOrderStatus] Proxy failed", { error: String(error) });
+    if (String(error?.message || error).includes("upstream_status_update_not_supported")) {
+      return res.status(502).json({
+        ok: false,
+        success: false,
+        error: "upstream_status_update_not_supported",
+        detail: "Status update endpoint is not deployed on Apps Script.",
+      });
+    }
     return res.status(502).json({ ok: false, success: false, error: "status_update_failed", detail: String(error) });
   }
 };

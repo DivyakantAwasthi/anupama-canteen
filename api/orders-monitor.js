@@ -211,6 +211,35 @@ const fetchJson = async (url, options = {}, timeoutMs = 7000) => {
   }
 };
 
+const assertUpstreamCanUpdateStatus = async () => {
+  const probeUrl = new URL(ORDERS_API_URL);
+  probeUrl.searchParams.set("action", "updateOrderStatus");
+  probeUrl.searchParams.set("orderId", "__STATUS_UPDATE_CAPABILITY_PROBE__");
+  probeUrl.searchParams.set("id", "__STATUS_UPDATE_CAPABILITY_PROBE__");
+  probeUrl.searchParams.set("status", "preparing");
+  probeUrl.searchParams.set("orderStatus", "preparing");
+  probeUrl.searchParams.set("date", "2099-01-01");
+  probeUrl.searchParams.set("orderDate", "2099-01-01");
+
+  const payload = await fetchJson(probeUrl.toString(), {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  }, 7000);
+
+  const action = String(payload?.action || "").toLowerCase();
+  const message = String(payload?.message || payload?.error || "").toLowerCase();
+
+  if (action.includes("append") || message.includes("unsupported action")) {
+    throw new Error("upstream_status_update_not_supported");
+  }
+
+  if (payload?.ok === false && action !== "updateorderstatus" && !message.includes("order not found")) {
+    throw new Error(payload?.error || payload?.message || "upstream_status_update_probe_failed");
+  }
+
+  return true;
+};
+
 const assertAuthorized = (req, res) => {
   if (!MONITOR_PASSWORD) {
     return true;
@@ -251,6 +280,31 @@ const listOrders = async (req, res) => {
   return res.status(502).json({ error: "orders_upstream_failed", detail: errors.join(" | ") });
 };
 
+const fetchOrdersForDate = async (selectedDate) => {
+  const errors = [];
+
+  for (const action of LIST_ACTIONS) {
+    try {
+      const url = new URL(ORDERS_API_URL);
+      url.searchParams.set("action", action);
+      url.searchParams.set("limit", "100");
+      url.searchParams.set("date", selectedDate);
+      url.searchParams.set("orderDate", selectedDate);
+
+      const payload = await fetchJson(url.toString(), { method: "GET", headers: { Accept: "application/json" } });
+      const orders = dedupeOrdersById(extractOrders(payload).filter((order) => order.orderDate === selectedDate));
+      if (orders.length || payload?.ok === true || payload?.success === true) {
+        return orders;
+      }
+    } catch (error) {
+      errors.push(`${action}: ${error?.message || "failed"}`);
+      await sleep(150);
+    }
+  }
+
+  throw new Error(errors.join(" | ") || "orders_upstream_failed");
+};
+
 const updateOrderStatus = async (req, res) => {
   const { orderId, status, timestamp, orderDate } = req.body || {};
   const normalizedStatus = normalizeStatus(status);
@@ -260,26 +314,26 @@ const updateOrderStatus = async (req, res) => {
   }
 
   console.log('[StatusUpdate] Updating order:', { orderId, status: normalizedStatus, orderDate, timestamp });
+
+  try {
+    await assertUpstreamCanUpdateStatus();
+  } catch (error) {
+    console.error('[StatusUpdate] Upstream does not support safe row updates; refusing to POST', { error: error?.message });
+    return res.status(502).json({
+      ok: false,
+      success: false,
+      error: "upstream_status_update_not_supported",
+      detail: error?.message || "Status update endpoint is not deployed on Apps Script.",
+    });
+  }
   
   // CRITICAL: Verify order exists before attempting update
   const resolvedDate = orderDate || String(timestamp || "").slice(0, 10);
   if (resolvedDate) {
     try {
       console.log('[StatusUpdate] Verifying order exists:', { orderId, resolvedDate });
-      
-      // Fetch orders for the date to verify this one exists
-      const listUrl = new URL(ORDERS_API_URL);
-      listUrl.searchParams.set("action", LIST_ACTIONS[0] || "listOrders");
-      listUrl.searchParams.set("limit", "100");
-      listUrl.searchParams.set("date", resolvedDate);
-      listUrl.searchParams.set("orderDate", resolvedDate);
-      
-      const listResponse = await fetchJson(listUrl.toString(), {
-        method: "GET",
-        headers: { Accept: "application/json" },
-      }, 7000);
-      
-      const existingOrders = extractOrders(listResponse);
+
+      const existingOrders = await fetchOrdersForDate(resolvedDate);
       const orderExists = existingOrders.some(o => String(o.orderId) === String(orderId));
       
       if (!orderExists) {
@@ -290,8 +344,13 @@ const updateOrderStatus = async (req, res) => {
         });
       }
     } catch (checkError) {
-      console.warn('[StatusUpdate] Existence check failed, but proceeding:', checkError?.message);
-      // Don't block on check failure, but log it
+      console.warn('[StatusUpdate] Existence check failed; refusing unsafe update:', checkError?.message);
+      return res.status(502).json({
+        ok: false,
+        success: false,
+        error: "order_verification_failed",
+        detail: checkError?.message || "Could not verify existing order before update.",
+      });
     }
   }
 
@@ -325,6 +384,10 @@ const updateOrderStatus = async (req, res) => {
         },
         7000
       );
+
+      if (String(responsePayload?.action || '').toLowerCase().includes('append')) {
+        throw new Error(responsePayload.error || responsePayload.message || "update_fallback_to_append");
+      }
 
       if (responsePayload?.ok === false || responsePayload?.success === false || responsePayload?.error) {
         throw new Error(responsePayload.error || responsePayload.message || "update rejected");
