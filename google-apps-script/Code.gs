@@ -28,12 +28,12 @@ const CONFIG = {
     'cancelled',
   ],
   STATUS_COLORS: {
-    pending_payment: '#dc2626',
-    payment_verified: '#f59e0b',
-    preparing: '#2563eb',
-    ready_for_pickup: '#16a34a',
-    delivered: '#6b7280',
-    cancelled: '#7f1d1d',
+    pending_payment: '#a16207',
+    payment_verified: '#a16207',
+    preparing: '#1d4ed8',
+    ready_for_pickup: '#6366f1',
+    delivered: '#64748b',
+    cancelled: '#b91c1c',
   },
 };
 
@@ -542,40 +542,41 @@ function rowToObject_(row) {
 }
 
 function applyOrderSheetFormatting_(sheet) {
-  ensureHeaders_(sheet);
   const lastRow = Math.max(sheet.getLastRow(), 1);
   const lastCol = CONFIG.HEADERS.length;
   sheet.setHiddenGridlines(true);
   sheet.setFrozenRows(1);
   sheet.setFrozenColumns(1);
   sheet.getRange(1, 1, 1, lastCol)
-    .setFontFamily('Segoe UI')
+    .setFontFamily('Aptos')
     .setFontWeight('bold')
-    .setFontSize(10)
+    .setFontSize(11)
     .setFontColor('#ffffff')
     .setBackground('#0f2a44')
-    .setHorizontalAlignment('center');
+    .setHorizontalAlignment('left')
+    .setVerticalAlignment('middle');
+  sheet.getRange(1, 7, 1, 1).setHorizontalAlignment('right');
+  sheet.getRange(1, 8, 1, 1).setHorizontalAlignment('center');
   sheet.setRowHeight(1, 34);
-  if (lastRow > 1) sheet.setRowHeights(2, lastRow - 1, 36);
+  if (lastRow > 1) sheet.setRowHeights(2, lastRow - 1, 34);
   sheet.getRange(1, 1, lastRow, lastCol)
-    .setFontFamily('Segoe UI')
+    .setFontFamily('Aptos')
     .setFontSize(10)
     .setWrap(true)
-    .setVerticalAlignment('middle')
-    .setBorder(false, false, false, false, false, false);
-  sheet.getRange(2, 1, Math.max(lastRow - 1, 1), 1).setFontWeight('bold').setFontColor('#0f2a44');
-  sheet.getRange(2, 3, Math.max(lastRow - 1, 1), 1).setFontWeight('bold');
-  sheet.getRange(2, 4, Math.max(lastRow - 1, 1), 1).setFontColor('#64748b');
-  sheet.getRange(2, 6, Math.max(lastRow - 1, 1), 1).setWrap(true);
-  sheet.getRange(1, 7, lastRow, 1).setNumberFormat('"Rs." #,##0.00').setHorizontalAlignment('right');
-  sheet.getRange(1, 8, lastRow, 1).setHorizontalAlignment('center').setFontWeight('bold');
-  sheet.getRange(1, 9, lastRow, 1).setNumberFormat('yyyy-mm-dd hh:mm');
-  if (sheet.getFilter()) sheet.getFilter().remove();
-  sheet.getRange(1, 1, lastRow, lastCol).createFilter();
+    .setVerticalAlignment('middle');
+  sheet.getRange(2, 1, Math.max(lastRow - 1, 1), 1).setFontWeight('bold').setFontColor('#0f2a44').setHorizontalAlignment('left');
+  sheet.getRange(2, 2, Math.max(lastRow - 1, 1), 1).setHorizontalAlignment('center');
+  sheet.getRange(2, 3, Math.max(lastRow - 1, 1), 2).setHorizontalAlignment('left');
+  sheet.getRange(2, 5, Math.max(lastRow - 1, 1), 1).setHorizontalAlignment('center');
+  sheet.getRange(2, 6, Math.max(lastRow - 1, 1), 1).setHorizontalAlignment('left');
+  sheet.getRange(2, 7, Math.max(lastRow - 1, 1), 1).setHorizontalAlignment('right');
+  sheet.getRange(2, 8, Math.max(lastRow - 1, 1), 1).setHorizontalAlignment('center').setFontWeight('bold');
+  sheet.getRange(2, 9, Math.max(lastRow - 1, 1), 1).setHorizontalAlignment('left');
+  sheet.getRange(1, 1, lastRow, lastCol)
+    .setBorder(false, false, false, false, false, true, '#e5e7eb', SpreadsheetApp.BorderStyle.SOLID);
   applyStatusValidation_(sheet, 2, Math.max(lastRow - 1, 1));
   applyAlternatingColors_(sheet, lastRow, lastCol);
   applyStatusColors_(sheet, 2);
-  applyTodayHighlight_(sheet, 2);
   applyOrderColumnWidths_(sheet);
 }
 
@@ -598,8 +599,7 @@ function applyStatusColors_(sheet, startRow) {
   CONFIG.STATUSES.forEach(function (status) {
     rules.push(SpreadsheetApp.newConditionalFormatRule()
       .whenTextEqualTo(status)
-      .setBackground(CONFIG.STATUS_COLORS[status])
-      .setFontColor('#ffffff')
+      .setFontColor(CONFIG.STATUS_COLORS[status])
       .setBold(true)
       .setRanges([sheet.getRange(firstRow, 8, Math.max(sheet.getMaxRows() - firstRow + 1, 1), 1)])
       .build());
@@ -610,11 +610,11 @@ function applyStatusColors_(sheet, startRow) {
 function applyAlternatingColors_(sheet, lastRow, lastCol) {
   sheet.getBandings().forEach(function (banding) { banding.remove(); });
   if (lastRow > 1) {
-    const banding = sheet.getRange(1, 1, lastRow, lastCol).applyRowBanding();
-    banding
+    sheet.getRange(1, 1, lastRow, lastCol)
+      .applyRowBanding()
       .setHeaderRowColor('#0f2a44')
       .setFirstRowColor('#ffffff')
-      .setSecondRowColor('#f8fafc');
+      .setSecondRowColor('#f7f8fa');
   }
 }
 
@@ -633,15 +633,15 @@ function applyTodayHighlight_(sheet, startRow) {
 }
 
 function applyOrderColumnWidths_(sheet) {
-  sheet.setColumnWidth(1, 128);
-  sheet.setColumnWidth(2, 112);
-  sheet.setColumnWidth(3, 170);
-  sheet.setColumnWidth(4, 190);
-  sheet.setColumnWidth(5, 128);
-  sheet.setColumnWidth(6, 320);
-  sheet.setColumnWidth(7, 110);
-  sheet.setColumnWidth(8, 154);
-  sheet.setColumnWidth(9, 160);
+  sheet.setColumnWidth(1, 130);
+  sheet.setColumnWidth(2, 105);
+  sheet.setColumnWidth(3, 165);
+  sheet.setColumnWidth(4, 185);
+  sheet.setColumnWidth(5, 118);
+  sheet.setColumnWidth(6, 230);
+  sheet.setColumnWidth(7, 100);
+  sheet.setColumnWidth(8, 135);
+  sheet.setColumnWidth(9, 155);
 }
 
 function ensureDashboardSheet_(ss) {
