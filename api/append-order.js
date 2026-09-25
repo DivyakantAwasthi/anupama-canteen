@@ -19,9 +19,9 @@ const parseBody = (body) => {
   return typeof body === "object" ? body : {};
 };
 
-const toPositiveInt = (value) => {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+const toOrderIdString = (value) => {
+  const normalized = String(value || "").trim();
+  return normalized ? normalized : null;
 };
 
 const extractOrderId = (source) => {
@@ -39,7 +39,7 @@ const extractOrderId = (source) => {
   ];
 
   for (const value of candidates) {
-    const parsed = toPositiveInt(value);
+    const parsed = toOrderIdString(value);
     if (parsed) {
       return parsed;
     }
@@ -100,6 +100,7 @@ module.exports = async (req, res) => {
     return res.status(500).json({ error: "orders_api_not_configured" });
   }
 
+  const body = parseBody(req.body);
   const {
     orderId,
     orderDateKey,
@@ -216,28 +217,32 @@ module.exports = async (req, res) => {
 
   for (const variant of variants) {
     try {
-      console.log(`[AppendOrder] Trying ${variant.label} variant for orderId=${orderId}`);\n      const result = await withRetry(async () => {
+      console.log(`[AppendOrder] Trying ${variant.label} variant for orderId=${orderId}`);
+      const result = await withRetry(async () => {
         const response = await variant.request();
         return evaluateResponse(response);
       });
 
       if (result.ok) {
-        const returnedOrderId = extractOrderId(result.payload) || toPositiveInt(orderId);
-        console.log(`[AppendOrder] Success with ${variant.label} variant, returned orderId=${returnedOrderId}`);\n        return res.status(200).json({
+        const returnedOrderId = extractOrderId(result.payload) || toOrderIdString(orderId);
+        console.log(`[AppendOrder] Success with ${variant.label} variant, returned orderId=${returnedOrderId}`);
+        return res.status(200).json({
           ok: true,
           orderId: returnedOrderId || undefined,
         });
       }
 
-      console.log(`[AppendOrder] Failed with ${variant.label}: ${result.detail}`);\n      attempts.push(`${variant.label}: ${result.detail || "failed"}`);
+      console.log(`[AppendOrder] Failed with ${variant.label}: ${result.detail}`);
+      attempts.push(`${variant.label}: ${result.detail || "failed"}`);
     } catch (error) {
-      console.log(`[AppendOrder] Error with ${variant.label}: ${error?.message}`);\n      attempts.push(`${variant.label}: ${error?.message || "network_error"}`);
+      console.log(`[AppendOrder] Error with ${variant.label}: ${error?.message}`);
+      attempts.push(`${variant.label}: ${error?.message || "network_error"}`);
     }
   }
 
-  console.log(`[AppendOrder] All variants failed for orderId=${orderId}:`, attempts);\n  return res.status(502).json({
+  console.log(`[AppendOrder] All variants failed for orderId=${orderId}:`, attempts);
+  return res.status(502).json({
     error: "forward_failed",
     detail: attempts.join(" | "),
   });
 };
-

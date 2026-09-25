@@ -43,4 +43,104 @@ const TEST_ORDERS = [
   },
 ];
 
-export const generateTestOrder = (templateIndex = 0) => {\n  const template = TEST_ORDERS[templateIndex % TEST_ORDERS.length];\n  const timestamp = new Date().toISOString();\n  const dateKey = timestamp.slice(0, 10);\n  const orderId = Math.floor(Math.random() * 900000) + 100000;\n\n  const itemsString = template.items\n    .map((item) => `${item.name} x${item.quantity}`)\n    .join(\", \");\n\n  const total = template.items.reduce(\n    (sum, item) => sum + item.price * item.quantity,\n    0\n  );\n\n  const order = {\n    orderId,\n    orderDateKey: dateKey,\n    createdAt: timestamp,\n    paidAt: null,\n    paymentMode: \"upi\",\n    status: \"pending_payment\",\n    total,\n    items: itemsString,\n    customer: {\n      name: template.customer.name,\n      email: template.customer.email,\n      phone: template.customer.phone,\n    },\n    error: null,\n    saving: false,\n  };\n\n  return order;\n};\n\nexport const validateOrderIntegrity = (orderFromUI, orderFromSheet) => {\n  if (!orderFromSheet) {\n    return { valid: false, errors: [\"Order not found in sheet\"] };\n  }\n\n  const errors = [];\n\n  if (Number(orderFromUI.orderId) !== Number(orderFromSheet.orderId)) {\n    errors.push(`Order ID mismatch: UI=${orderFromUI.orderId}, Sheet=${orderFromSheet.orderId}`);\n  }\n\n  const uiItems = String(orderFromUI.items || \"\").trim();\n  const sheetItems = String(orderFromSheet.items || \"\").trim();\n\n  if (uiItems !== sheetItems) {\n    errors.push(`Items mismatch: UI=\"${uiItems}\", Sheet=\"${sheetItems}\"`);\n  }\n\n  if (Number(orderFromUI.total).toFixed(2) !== Number(orderFromSheet.total).toFixed(2)) {\n    errors.push(`Total mismatch: UI=${orderFromUI.total}, Sheet=${orderFromSheet.total}`);\n  }\n\n  const expectedStatus = orderFromUI.status || \"pending_payment\";\n  const actualStatus = orderFromSheet.status || \"pending_payment\";\n\n  if (expectedStatus !== actualStatus) {\n    errors.push(`Status mismatch: Expected=${expectedStatus}, Actual=${actualStatus}`);\n  }\n\n  if (String(orderFromUI.customer.name || \"\").trim() !== String(orderFromSheet.customerName || \"\").trim()) {\n    errors.push(`Customer name mismatch: UI=\"${orderFromUI.customer.name}\", Sheet=\"${orderFromSheet.customerName}\"`);\n  }\n\n  return {\n    valid: errors.length === 0,\n    errors,\n  };\n};\n\nexport const logOrderDebug = (label, order) => {\n  console.log(`[OrderDebug] ${label}:`, {\n    orderId: order.orderId,\n    items: order.items,\n    total: order.total,\n    status: order.status,\n    customer: order.customer?.name,\n  });\n};\n\nexport const validateNoDuplicates = (orders) => {\n  const seen = new Set();\n  const duplicates = [];\n\n  for (const order of orders) {\n    const key = `${order.orderId}`;\n    if (seen.has(key)) {\n      duplicates.push(key);\n    }\n    seen.add(key);\n  }\n\n  return {\n    hasDuplicates: duplicates.length > 0,\n    duplicateCount: duplicates.length,\n    duplicateIds: duplicates,\n  };\n};\n
+export const generateTestOrder = (templateIndex = 0) => {
+  const template = TEST_ORDERS[templateIndex % TEST_ORDERS.length];
+  const timestamp = new Date().toISOString();
+  const dateKey = timestamp.slice(0, 10);
+  const orderId = Math.floor(Math.random() * 900000) + 100000;
+
+  const itemsString = template.items
+    .map((item) => `${item.name} x${item.quantity}`)
+    .join(", ");
+
+  const total = template.items.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
+
+  return {
+    orderId,
+    orderDateKey: dateKey,
+    createdAt: timestamp,
+    paidAt: null,
+    paymentMode: "upi",
+    status: "pending_payment",
+    total,
+    items: itemsString,
+    customer: {
+      name: template.customer.name,
+      email: template.customer.email,
+      phone: template.customer.phone,
+    },
+    error: null,
+    saving: false,
+  };
+};
+
+export const validateOrderIntegrity = (orderFromUI, orderFromSheet) => {
+  if (!orderFromSheet) {
+    return { valid: false, errors: ["Order not found in sheet"] };
+  }
+
+  const errors = [];
+
+  if (String(orderFromUI.orderId) !== String(orderFromSheet.orderId)) {
+    errors.push(`Order ID mismatch: UI=${orderFromUI.orderId}, Sheet=${orderFromSheet.orderId}`);
+  }
+
+  const uiItems = String(orderFromUI.items || "").trim();
+  const sheetItems = String(orderFromSheet.items || "").trim();
+
+  if (uiItems !== sheetItems) {
+    errors.push(`Items mismatch: UI="${uiItems}", Sheet="${sheetItems}"`);
+  }
+
+  if (Number(orderFromUI.total).toFixed(2) !== Number(orderFromSheet.total).toFixed(2)) {
+    errors.push(`Total mismatch: UI=${orderFromUI.total}, Sheet=${orderFromSheet.total}`);
+  }
+
+  const expectedStatus = orderFromUI.status || "pending_payment";
+  const actualStatus = orderFromSheet.status || "pending_payment";
+
+  if (expectedStatus !== actualStatus) {
+    errors.push(`Status mismatch: Expected=${expectedStatus}, Actual=${actualStatus}`);
+  }
+
+  if (String(orderFromUI.customer.name || "").trim() !== String(orderFromSheet.customerName || "").trim()) {
+    errors.push(`Customer name mismatch: UI="${orderFromUI.customer.name}", Sheet="${orderFromSheet.customerName}"`);
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
+};
+
+export const logOrderDebug = (label, order) => {
+  console.log(`[OrderDebug] ${label}:`, {
+    orderId: order.orderId,
+    items: order.items,
+    total: order.total,
+    status: order.status,
+    customer: order.customer?.name,
+  });
+};
+
+export const validateNoDuplicates = (orders) => {
+  const seen = new Set();
+  const duplicates = [];
+
+  for (const order of orders) {
+    const key = `${order.orderId}`;
+    if (seen.has(key)) {
+      duplicates.push(key);
+    }
+    seen.add(key);
+  }
+
+  return {
+    hasDuplicates: duplicates.length > 0,
+    duplicateCount: duplicates.length,
+    duplicateIds: duplicates,
+  };
+};

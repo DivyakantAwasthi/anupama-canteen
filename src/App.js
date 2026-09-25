@@ -176,9 +176,10 @@ const writeOrdersForDate = (dateKey, records) => {
 
 const upsertOrderForDate = (dateKey, orderRecord) => {
   const orders = readOrdersForDate(dateKey);
-  const nextOrders = orders.some((entry) => Number(entry.orderId) === Number(orderRecord.orderId))
+  const orderId = String(orderRecord.orderId);
+  const nextOrders = orders.some((entry) => String(entry.orderId) === orderId)
     ? orders.map((entry) =>
-        Number(entry.orderId) === Number(orderRecord.orderId) ? orderRecord : entry
+        String(entry.orderId) === orderId ? orderRecord : entry
       )
     : [orderRecord, ...orders];
 
@@ -188,8 +189,8 @@ const upsertOrderForDate = (dateKey, orderRecord) => {
 const replaceOrderIdForDate = (dateKey, previousOrderId, nextOrder) => {
   const orders = readOrdersForDate(dateKey).filter(
     (entry) =>
-      Number(entry.orderId) !== Number(previousOrderId) &&
-      Number(entry.orderId) !== Number(nextOrder.orderId)
+      String(entry.orderId) !== String(previousOrderId) &&
+      String(entry.orderId) !== String(nextOrder.orderId)
   );
   writeOrdersForDate(dateKey, [nextOrder, ...orders]);
 };
@@ -204,7 +205,7 @@ const findLocalOrderById = (orderId) => {
       const raw = localStorage.getItem(key);
       const parsed = raw ? JSON.parse(raw) : [];
       const match = Array.isArray(parsed)
-        ? parsed.find((entry) => Number(entry.orderId) === Number(orderId))
+        ? parsed.find((entry) => String(entry.orderId) === String(orderId))
         : null;
 
       if (match) {
@@ -538,7 +539,7 @@ function App() {
         }
 
         setOrderDetails((previous) => {
-          if (!previous || Number(previous.orderId) !== Number(currentOrder.orderId)) {
+          if (!previous || String(previous.orderId) !== String(currentOrder.orderId)) {
             return previous;
           }
 
@@ -706,7 +707,7 @@ function App() {
     // This prevents any mutations or reference sharing that could corrupt items
     let cartSnapshot;
     try {
-      cartSnapshot = structuredClone ? structuredClone(cartItems) : JSON.parse(JSON.stringify(cartItems));
+      cartSnapshot = typeof structuredClone === "function" ? structuredClone(cartItems) : JSON.parse(JSON.stringify(cartItems));
     } catch {
       cartSnapshot = JSON.parse(JSON.stringify(cartItems));
     }
@@ -751,7 +752,7 @@ function App() {
       // CRITICAL: Store items as IMMUTABLE STRING, not reference
       items: String(items),  // Explicit string conversion to prevent any reference issues
       // CRITICAL: Store cartSnapshot separately for validation
-      cartSnapshot: structuredClone ? structuredClone(cartSnapshot) : JSON.parse(JSON.stringify(cartSnapshot)),
+      cartSnapshot: typeof structuredClone === "function" ? structuredClone(cartSnapshot) : JSON.parse(JSON.stringify(cartSnapshot)),
       customer: {
         name: String(name),  // Explicit string conversions
         email: String(email),
@@ -830,7 +831,7 @@ function App() {
       console.log('[ConfirmPayment] Sending order to backend:', { orderId: orderSnapshot.orderId, items: orderSnapshot.items });
       const result = await appendOrderToSheet(orderSnapshot);
 
-      const canonicalOrderId = Number(result.orderId || currentOrder.orderId);
+      const canonicalOrderId = String(result.orderId || currentOrder.orderId);
       
       // CRITICAL: Create new order state with immutable fields
       const nextOrder = {
@@ -843,7 +844,7 @@ function App() {
         error: null,
       };
 
-      if (canonicalOrderId !== Number(currentOrder.orderId)) {
+      if (canonicalOrderId !== String(currentOrder.orderId)) {
         replaceOrderIdForDate(currentOrder.orderDateKey, currentOrder.orderId, nextOrder);
       } else {
         upsertOrderForDate(currentOrder.orderDateKey, nextOrder);
@@ -922,7 +923,7 @@ function App() {
       console.log('[CashAtCounter] Sending order to backend:', { orderId: orderSnapshot.orderId, items: orderSnapshot.items });
       const result = await appendOrderToSheet(orderSnapshot);
 
-      const canonicalOrderId = Number(result.orderId || currentOrder.orderId);
+      const canonicalOrderId = String(result.orderId || currentOrder.orderId);
       
       // CRITICAL: Create new order state with immutable fields
       const nextOrder = {
@@ -934,7 +935,7 @@ function App() {
         error: null,
       };
 
-      if (canonicalOrderId !== Number(currentOrder.orderId)) {
+      if (canonicalOrderId !== String(currentOrder.orderId)) {
         replaceOrderIdForDate(currentOrder.orderDateKey, currentOrder.orderId, nextOrder);
       } else {
         upsertOrderForDate(currentOrder.orderDateKey, nextOrder);
@@ -993,8 +994,8 @@ function App() {
   };
 
   const trackOrder = async () => {
-    const parsedOrderId = Number(trackOrderId.trim());
-    if (!Number.isInteger(parsedOrderId) || parsedOrderId <= 0) {
+    const requestedOrderId = trackOrderId.trim();
+    if (!requestedOrderId) {
       setTrackingError("Enter a valid order ID.");
       setTrackedOrder(null);
       return;
@@ -1003,7 +1004,7 @@ function App() {
     setTrackingError("");
 
     try {
-      const remoteOrder = await fetchOrderStatusFromSheet({ orderId: parsedOrderId });
+      const remoteOrder = await fetchOrderStatusFromSheet({ orderId: requestedOrderId });
       if (remoteOrder) {
         setTrackedOrder({
           ...remoteOrder,
@@ -1015,14 +1016,14 @@ function App() {
       // Fall back to local order cache.
     }
 
-    const localOrder = findLocalOrderById(parsedOrderId);
+    const localOrder = findLocalOrderById(requestedOrderId);
     if (localOrder) {
       setTrackedOrder({ ...localOrder, status: inferLocalOrderStatus(localOrder) });
       return;
     }
 
     setTrackedOrder(null);
-    setTrackingError(`Order #${parsedOrderId} was not found.`);
+    setTrackingError(`Order #${requestedOrderId} was not found.`);
   };
 
   if (currentOrder) {
@@ -1252,7 +1253,6 @@ function App() {
               <div className="track-form">
                 <input
                   type="text"
-                  inputMode="numeric"
                   value={trackOrderId}
                   onChange={(event) => setTrackOrderId(event.target.value)}
                   placeholder="Enter order ID"

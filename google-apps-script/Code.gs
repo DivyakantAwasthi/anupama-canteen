@@ -96,6 +96,9 @@ function handleRequest_(e, method) {
       setupWorkbook_({ backup: true, migrate: true, force: true });
       return json_({ ok: true, message: 'Migration complete. Backup sheet created.' });
     }
+    if (action === 'migrateTypedColumns') {
+      return json_(migrateTypedColumns_());
+    }
     setupWorkbook_({ backup: false });
     if (['appendOrder', 'addOrder', 'createOrder'].indexOf(action) !== -1) {
       return json_(appendOrder_(params));
@@ -256,6 +259,47 @@ function migrateOrdersSheet_(sheet) {
   removeExtraRowsAndColumns_(sheet, cleaned.length, CONFIG.HEADERS.length);
 }
 
+function migrateTypedColumns_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(CONFIG.ORDERS_SHEET);
+  if (!sheet) return { ok: false, error: 'orders_sheet_missing' };
+
+  // Backup original (safe copy)
+  const backupName = CONFIG.BACKUP_PREFIX + 'typedcols_' + Utilities.formatDate(new Date(), CONFIG.TIME_ZONE, 'yyyyMMdd_HHmmss');
+  try {
+    sheet.copyTo(ss).setName(backupName).hideSheet();
+  } catch (e) {
+    // ignore if backup fails
+    console.log('[AppsScript:migrateTypedColumns] Backup failed', String(e && e.message ? e.message : e));
+  }
+
+  // Create a new sheet and copy values only (this avoids typed-column metadata)
+  const tmpName = CONFIG.ORDERS_SHEET + '_migration_tmp';
+  const existingTmp = ss.getSheetByName(tmpName);
+  if (existingTmp) ss.deleteSheet(existingTmp);
+  const tmp = ss.insertSheet(tmpName);
+  const values = sheet.getDataRange().getValues();
+  if (values && values.length) tmp.getRange(1, 1, values.length, values[0].length).setValues(values);
+
+  // Apply basic formatting and validation consistent with intended sheet
+  try {
+    applyOrderSheetFormatting_(tmp);
+  } catch (e) {
+    console.log('[AppsScript:migrateTypedColumns] Formatting failed', String(e && e.message ? e.message : e));
+  }
+
+  // Remove original sheet and rename tmp to original name
+  try {
+    ss.deleteSheet(sheet);
+    tmp.setName(CONFIG.ORDERS_SHEET);
+  } catch (e) {
+    console.log('[AppsScript:migrateTypedColumns] Replace failed', String(e && e.message ? e.message : e));
+    return { ok: false, error: 'replace_failed', message: String(e && e.message ? e.message : e) };
+  }
+
+  return { ok: true, message: 'Typed-column migration completed', backup: backupName };
+}
+
 function removeExtraRowsAndColumns_(sheet, rowCount, columnCount) {
   const maxRows = sheet.getMaxRows();
   if (maxRows > rowCount) sheet.deleteRows(rowCount + 1, maxRows - rowCount);
@@ -276,7 +320,7 @@ function appendOrder_(params) {
   const incomingOrderId = String(params.orderId || params.id || '').trim();
   const existing = incomingOrderId ? findOrderRow_(incomingOrderId, orderDate) : null;
   if (existing) {
-    return { ok: true, duplicate: true, orderId: existing.order.orderId, order: existing.order };
+    return { ok: true, action: 'appendOrder', duplicate: true, orderId: existing.order.orderId, order: existing.order };
   }
 
   const candidateOrder = {
@@ -292,7 +336,7 @@ function appendOrder_(params) {
   };
   const duplicate = findDuplicateOrder_(candidateOrder);
   if (duplicate) {
-    return { ok: true, duplicate: true, orderId: duplicate.order.orderId, order: duplicate.order };
+    return { ok: true, action: 'appendOrder', duplicate: true, orderId: duplicate.order.orderId, order: duplicate.order };
   }
 
   candidateOrder.orderId = isProfessionalOrderId_(incomingOrderId)
@@ -304,7 +348,7 @@ function appendOrder_(params) {
   applyOrderSheetFormatting_(sheet);
   updateDashboardAndAnalytics_();
   rebuildAdminSheet_();
-  return { ok: true, orderId: candidateOrder.orderId, order: candidateOrder };
+  return { ok: true, action: 'appendOrder', orderId: candidateOrder.orderId, order: candidateOrder };
 }
 
 function validateOrder_(order) {
@@ -368,7 +412,7 @@ function updateOrderStatus_(params) {
 
   if (!found) {
     console.log('[AppsScript:updateOrderStatus] Order row not found', { orderId: orderId, date: date });
-    return { ok: false, success: false, message: 'Order not found', orderId: orderId };
+    return { ok: false, success: false, action: 'updateOrderStatus', message: 'Order not found', orderId: orderId };
   }
 
   console.log('[AppsScript:updateOrderStatus] Updating sheet row', { rowIndex: found.rowIndex, orderId: orderId, status: status, timestamp: timestamp });
@@ -379,7 +423,7 @@ function updateOrderStatus_(params) {
   rebuildAdminSheet_();
 
   console.log('[AppsScript:updateOrderStatus] Update completed', { rowIndex: found.rowIndex, orderId: orderId, status: status, timestamp: timestamp });
-  return { ok: true, success: true, orderId: orderId, status: status, timestamp: timestamp };
+  return { ok: true, success: true, action: 'updateOrderStatus', orderId: orderId, status: status, timestamp: timestamp };
 }
 
 function findOrderRow_(orderId, orderDate) {

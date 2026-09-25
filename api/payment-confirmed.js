@@ -60,9 +60,9 @@ const evaluateForwardResponse = async (response) => {
   return { ok: true };
 };
 
-const toPositiveInt = (value) => {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+const toOrderIdString = (value) => {
+  const normalized = String(value || "").trim();
+  return normalized ? normalized : null;
 };
 
 const extractOrderIdFromObject = (source) => {
@@ -81,7 +81,7 @@ const extractOrderIdFromObject = (source) => {
   ];
 
   for (const candidate of direct) {
-    const parsed = toPositiveInt(candidate);
+    const parsed = toOrderIdString(candidate);
     if (parsed) {
       return parsed;
     }
@@ -164,7 +164,7 @@ module.exports = async (req, res) => {
 
     return res.json({
       ok: true,
-      orderId: extractOrderIdFromObject(evaluated.payload) || toPositiveInt(orderId) || undefined,
+      orderId: extractOrderIdFromObject(evaluated.payload) || toOrderIdString(orderId) || undefined,
     });
   } catch (err) {
     console.error('Webhook handler error', err);

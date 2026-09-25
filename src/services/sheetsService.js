@@ -353,9 +353,9 @@ const evaluateForwardResponse = async (response) => {
   }
 };
 
-const toPositiveInt = (value) => {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+const toOrderIdString = (value) => {
+  const normalized = String(value || "").trim();
+  return normalized ? normalized : null;
 };
 
 const extractOrderId = (value) => {
@@ -373,7 +373,7 @@ const extractOrderId = (value) => {
   ];
 
   for (const entry of direct) {
-    const parsed = toPositiveInt(entry);
+    const parsed = toOrderIdString(entry);
     if (parsed) {
       return parsed;
     }
@@ -530,7 +530,7 @@ export async function appendOrderToSheet(orderData) {
     if (proxyResult.ok) {
       return {
         ok: true,
-        orderId: extractOrderId(proxyResult.payload) || toPositiveInt(orderData.orderId),
+        orderId: extractOrderId(proxyResult.payload) || toOrderIdString(orderData.orderId),
       };
     }
     attempts.push(`proxy: ${proxyResult.detail}`);
@@ -585,7 +585,7 @@ export async function appendOrderToSheet(orderData) {
       if (result.ok) {
         return {
           ok: true,
-          orderId: extractOrderId(result.payload) || toPositiveInt(orderData.orderId),
+          orderId: extractOrderId(result.payload) || toOrderIdString(orderData.orderId),
         };
       }
       attempts.push(`${variant.label}: ${result.detail}`);
@@ -628,7 +628,7 @@ const normalizeTrackedOrder = (rawOrder) => {
     return null;
   }
 
-  const orderId = toPositiveInt(
+  const orderId = toOrderIdString(
     pickField(rawOrder, ["orderId", "Order ID", "id", "OrderId", "order_id"], null)
   );
   if (!orderId) {
@@ -687,7 +687,7 @@ const parseTrackPayload = (payload, requestedOrderId) => {
   }
 
   return (
-    normalized.find((entry) => Number(entry.orderId) === Number(requestedOrderId)) || null
+    normalized.find((entry) => String(entry.orderId) === String(requestedOrderId)) || null
   );
 };
 
@@ -733,5 +733,4 @@ export async function fetchOrderStatusFromSheet({ orderDateKey, orderId }) {
 
   throw new Error("Unable to fetch order status right now.");
 }
-
 

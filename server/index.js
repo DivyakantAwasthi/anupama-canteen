@@ -67,9 +67,9 @@ const evaluateForwardResponse = async (response) => {
   return { ok: true };
 };
 
-const toPositiveInt = (value) => {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+const toOrderIdString = (value) => {
+  const normalized = String(value || "").trim();
+  return normalized ? normalized : null;
 };
 
 const extractOrderIdFromObject = (source) => {
@@ -88,7 +88,7 @@ const extractOrderIdFromObject = (source) => {
   ];
 
   for (const candidate of direct) {
-    const parsed = toPositiveInt(candidate);
+    const parsed = toOrderIdString(candidate);
     if (parsed) {
       return parsed;
     }
@@ -247,7 +247,7 @@ const forwardOrderToSheets = async (sourceBody) => {
   return {
     ok: true,
     status: 200,
-    orderId: canonicalOrderId || toPositiveInt(orderId) || undefined,
+    orderId: canonicalOrderId || toOrderIdString(orderId) || undefined,
   };
 };
 

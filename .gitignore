@@ -6,5 +6,8 @@ build/
 .env.development.local
 .env.test.local
 .env.production.local
+.vercel.env
 
 .vercel
+.clasp.json
+.clasprc.json
