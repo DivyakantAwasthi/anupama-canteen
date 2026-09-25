@@ -1,4 +1,5 @@
 const CONFIG = {
+  SPREADSHEET_ID: '1VpVG6TVGf7hco4Yuy4K5LDMFW-Cq6Hl1x0nO2MvQ1Ns',
   ORDERS_SHEET: 'SnackOrders',
   DASHBOARD_SHEET: 'Dashboard',
   ADMIN_SHEET: 'AdminOrders',
@@ -36,12 +37,52 @@ const CONFIG = {
   },
 };
 
+function getSpreadsheet_() {
+  return SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+}
+
 function doGet(e) {
   return handleRequest_(e, 'GET');
 }
 
 function doPost(e) {
-  return handleRequest_(e, 'POST');
+  try {
+    const params = getParams_(e);
+    const rawAction = String(params.action || '').trim();
+    const action = rawAction ? rawAction.toLowerCase() : '';
+
+    if (!action) {
+      return json_({ ok: false, message: 'Unsupported action' });
+    }
+
+    if (['appendorder', 'addorder', 'createorder'].indexOf(action) !== -1) {
+      return json_(appendOrder_(params));
+    }
+
+    if (['updateorderstatus', 'setorderstatus', 'updatestatus'].indexOf(action) !== -1) {
+      return json_(updateOrderStatus_(params));
+    }
+
+    if (action === 'notify') {
+      return json_(notify_(params));
+    }
+
+    return json_({ ok: false, message: 'Unsupported action' });
+  } catch (error) {
+    return json_({
+      ok: false,
+      message: String(error && error.message ? error.message : error),
+    });
+  }
+}
+
+function notify_(params) {
+  return {
+    ok: true,
+    action: 'notify',
+    message: 'Notification accepted',
+    params: params || {},
+  };
 }
 
 function onOpen() {
@@ -99,10 +140,6 @@ function handleRequest_(e, method) {
     if (action === 'migrateTypedColumns') {
       return json_(migrateTypedColumns_());
     }
-    setupWorkbook_({ backup: false });
-    if (['appendOrder', 'addOrder', 'createOrder'].indexOf(action) !== -1) {
-      return json_(appendOrder_(params));
-    }
     if (['listOrders', 'getOrders', 'orders', 'recentOrders', 'kitchenOrders'].indexOf(action) !== -1) {
       return json_({ ok: true, orders: listOrders_(params) });
     }
@@ -112,6 +149,10 @@ function handleRequest_(e, method) {
     }
     if (['updateOrderStatus', 'setOrderStatus', 'updateStatus'].indexOf(action) !== -1) {
       return json_(updateOrderStatus_(params));
+    }
+    setupWorkbook_({ backup: false });
+    if (['appendOrder', 'addOrder', 'createOrder'].indexOf(action) !== -1) {
+      return json_(appendOrder_(params));
     }
 
     return json_({ ok: false, error: 'unknown_action', action });
@@ -146,7 +187,7 @@ function getParams_(e) {
 
 function setupWorkbook_(options) {
   const opts = options || {};
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet_();
   const orders = getOrCreateSheet_(ss, CONFIG.ORDERS_SHEET);
 
   ensureHeaders_(orders);
@@ -185,7 +226,7 @@ function showDeliveredOrders() {
 }
 
 function clearOrderFilters() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.ORDERS_SHEET);
+  const sheet = getSpreadsheet_().getSheetByName(CONFIG.ORDERS_SHEET);
   if (!sheet) return;
   const filter = sheet.getFilter();
   if (!filter) return;
@@ -195,7 +236,7 @@ function clearOrderFilters() {
 }
 
 function applyOrderQuickFilter_(options) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.ORDERS_SHEET);
+  const sheet = getSpreadsheet_().getSheetByName(CONFIG.ORDERS_SHEET);
   if (!sheet) return;
   applyOrderSheetFormatting_(sheet);
   const filter = sheet.getFilter();
@@ -260,7 +301,7 @@ function migrateOrdersSheet_(sheet) {
 }
 
 function migrateTypedColumns_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet_();
   const sheet = ss.getSheetByName(CONFIG.ORDERS_SHEET);
   if (!sheet) return { ok: false, error: 'orders_sheet_missing' };
 
@@ -314,7 +355,7 @@ function isBlankRow_(row) {
 }
 
 function appendOrder_(params) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.ORDERS_SHEET);
+  const sheet = getSpreadsheet_().getSheetByName(CONFIG.ORDERS_SHEET);
   const timestamp = normalizeTimestamp_(params.timestamp);
   const orderDate = normalizeDate_(params.orderDate || params.orderDateKey || params.date || timestamp) || todayKey_();
   const incomingOrderId = String(params.orderId || params.id || '').trim();
@@ -378,7 +419,7 @@ function isProfessionalOrderId_(value) {
 }
 
 function listOrders_(params) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.ORDERS_SHEET);
+  const sheet = getSpreadsheet_().getSheetByName(CONFIG.ORDERS_SHEET);
   const data = rowsToObjects_(sheet);
   const date = normalizeDate_(params.orderDate || params.date || '');
   const limit = Math.max(1, Math.min(Number(params.limit || 100), 500));
@@ -410,6 +451,11 @@ function updateOrderStatus_(params) {
     found = findOrderRow_(orderId, '');
   }
 
+  if (found && found.ok === false && found.success === false && found.message === 'Duplicate orderId') {
+    console.log('[AppsScript:updateOrderStatus] Duplicate orderId detected; not updating any row', { orderId: orderId, date: date });
+    return { ok: false, success: false, action: 'updateOrderStatus', message: 'Duplicate orderId' };
+  }
+
   if (!found) {
     console.log('[AppsScript:updateOrderStatus] Order row not found', { orderId: orderId, date: date });
     return { ok: false, success: false, action: 'updateOrderStatus', message: 'Order not found', orderId: orderId };
@@ -418,32 +464,39 @@ function updateOrderStatus_(params) {
   console.log('[AppsScript:updateOrderStatus] Updating sheet row', { rowIndex: found.rowIndex, orderId: orderId, status: status, timestamp: timestamp });
   found.sheet.getRange(found.rowIndex, 8).setValue(status);
   found.sheet.getRange(found.rowIndex, 9).setValue(timestamp);
-  applyOrderSheetFormatting_(found.sheet);
-  updateDashboardAndAnalytics_();
-  rebuildAdminSheet_();
-
   console.log('[AppsScript:updateOrderStatus] Update completed', { rowIndex: found.rowIndex, orderId: orderId, status: status, timestamp: timestamp });
   return { ok: true, success: true, action: 'updateOrderStatus', orderId: orderId, status: status, timestamp: timestamp };
 }
 
 function findOrderRow_(orderId, orderDate) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.ORDERS_SHEET);
+  const sheet = getSpreadsheet_().getSheetByName(CONFIG.ORDERS_SHEET);
   const values = sheet.getDataRange().getValues();
   console.log('[AppsScript:findOrderRow] Searching for order', { orderId: orderId, orderDate: orderDate, rows: values.length - 1 });
+  const matches = [];
   for (let i = 1; i < values.length; i += 1) {
     const rowOrderId = String(values[i][0] || '').trim();
     const rowDate = normalizeDate_(values[i][1]) || normalizeDate_(values[i][8]);
     if (rowOrderId === String(orderId).trim() && (!orderDate || rowDate === orderDate)) {
+      matches.push({ sheet: sheet, rowIndex: i + 1, order: rowToObject_(values[i]) });
       console.log('[AppsScript:findOrderRow] Found match', { rowIndex: i + 1, rowOrderId: rowOrderId, rowDate: rowDate });
-      return { sheet: sheet, rowIndex: i + 1, order: rowToObject_(values[i]) };
     }
   }
+
+  if (matches.length > 1) {
+    console.log('[AppsScript:findOrderRow] Duplicate orderId found', { orderId: orderId, orderDate: orderDate, count: matches.length });
+    return { ok: false, success: false, action: 'findOrderRow', message: 'Duplicate orderId', orderId: String(orderId).trim(), duplicates: matches.map(function (match) { return match.rowIndex; }) };
+  }
+
+  if (matches.length === 1) {
+    return matches[0];
+  }
+
   console.log('[AppsScript:findOrderRow] No matching row found', { orderId: orderId, orderDate: orderDate });
   return null;
 }
 
 function findDuplicateOrder_(candidate) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.ORDERS_SHEET);
+  const sheet = getSpreadsheet_().getSheetByName(CONFIG.ORDERS_SHEET);
   const values = sheet.getDataRange().getValues();
   const candidateTime = new Date(candidate.timestamp).getTime();
   for (let i = 1; i < values.length; i += 1) {
@@ -638,7 +691,7 @@ function ensureDashboardSheet_(ss) {
 }
 
 function updateDashboardAndAnalytics_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet_();
   const orders = rowsToObjects_(ss.getSheetByName(CONFIG.ORDERS_SHEET));
   updateAnalytics_(ss.getSheetByName(CONFIG.ANALYTICS_SHEET), orders);
   updateDashboard_(ss.getSheetByName(CONFIG.DASHBOARD_SHEET), orders);
@@ -656,7 +709,7 @@ function updateDashboard_(sheet, orders) {
     .setHorizontalAlignment('center')
     .setVerticalAlignment('middle')
     .setBorder(true, true, true, true, false, false, '#e2e8f0', SpreadsheetApp.BorderStyle.SOLID);
-  rebuildDashboardCharts_(SpreadsheetApp.getActiveSpreadsheet());
+  rebuildDashboardCharts_(getSpreadsheet_());
 }
 
 function ensureAnalyticsSheet_(ss) {
@@ -785,7 +838,7 @@ function totalQuantity_(items) {
 }
 
 function rebuildAdminSheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet_();
   const sheet = getOrCreateSheet_(ss, CONFIG.ADMIN_SHEET);
   const searchOrderId = String(sheet.getRange('B2').getValue() || '').trim().toLowerCase();
   const searchPhone = String(sheet.getRange('C2').getValue() || '').trim().toLowerCase();
@@ -875,7 +928,7 @@ function formatMenuSheet_(ss) {
 }
 
 function getMenuItems_() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.MENU_SHEET);
+  const sheet = getSpreadsheet_().getSheetByName(CONFIG.MENU_SHEET);
   if (!sheet) return [];
   const values = sheet.getDataRange().getValues();
   if (values.length < 2) return [];
