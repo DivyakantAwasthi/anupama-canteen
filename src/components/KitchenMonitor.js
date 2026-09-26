@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FiClock, FiLock, FiRefreshCw, FiVolume2 } from "react-icons/fi";
+import { formatTimestamp } from "../utils/formatters";
 import {
   ORDER_STATUS_COLORS,
   ORDER_STATUS_LABELS,
@@ -14,18 +15,6 @@ import "./KitchenMonitor.css";
 
 const PASSWORD_KEY = "anupama:kitchen:password";
 const HIGHLIGHT_MS = 9000;
-
-const formatTime = (value) => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "--";
-  }
-
-  return date.toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-};
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat("en-IN", {
@@ -339,7 +328,7 @@ function KitchenMonitor() {
         </div>
         <div className="kitchen-clock">
           <FiClock />
-          Last updated {lastUpdatedAt ? formatTime(lastUpdatedAt) : "--"}
+          Last updated {lastUpdatedAt ? formatTimestamp(lastUpdatedAt) : "--"}
         </div>
         <button
           type="button"
@@ -382,7 +371,7 @@ function KitchenMonitor() {
                 </div>
 
                 <div className="order-meta">
-                  <span>{formatTime(order.timestamp)}</span>
+                  <span>{formatTimestamp(order.timestamp)}</span>
                   <strong>{formatCurrency(order.total)}</strong>
                 </div>
 

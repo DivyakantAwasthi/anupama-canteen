@@ -28,6 +28,31 @@ export const formatRelativeDate = (dateValue) => {
 };
 
 /**
+ * Format a timestamp in India Standard Time for display
+ * @param {string|number|Date} value - The timestamp to format
+ * @returns {string} Formatted timestamp (e.g., "25 Sep 2026, 2:14 PM")
+ */
+export const formatTimestamp = (value) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "--";
+  }
+
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Kolkata",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(({ type, value: part }) => [type, part]));
+
+  return `${values.day} ${values.month} ${values.year}, ${values.hour}:${values.minute} ${values.dayPeriod}`;
+};
+
+/**
  * Format a price to INR currency string
  * @param {number} amount - The price amount
  * @returns {string} Formatted price (e.g., "₹50.00")
