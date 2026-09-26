@@ -24,22 +24,29 @@
 
 .customer-status-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  width: min(100%, 1320px);
+  margin-inline: auto;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
   gap: 16px;
+  justify-content: center;
 }
 
 .customer-status-card {
   display: grid;
-  min-height: 240px;
+  width: 100%;
+  max-width: 640px;
+  min-width: 0;
   align-content: start;
   gap: 12px;
   padding: 22px;
+  box-sizing: border-box;
   border: 2px solid rgba(148, 163, 184, 0.18);
   border-radius: 8px;
   background: #f8fafc;
   color: #0f172a;
   text-align: center;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.24);
+  justify-self: center;
 }
 
 .customer-status-top {
@@ -49,9 +56,10 @@
 
 .customer-status-card span {
   color: #475569;
-  font-size: clamp(2rem, 5vw, 4.6rem);
+  font-size: clamp(1rem, 3.2vw, 2.4rem);
   font-weight: 950;
-  line-height: 1;
+  line-height: 1.05;
+  white-space: nowrap;
 }
 
 .customer-status-card strong {
@@ -64,6 +72,7 @@
   color: #0f172a;
   font-size: 1.15rem;
   font-weight: 900;
+  overflow-wrap: anywhere;
 }
 
 .customer-status-card ul {
@@ -75,6 +84,7 @@
 }
 
 .customer-status-card li {
+  min-width: 0;
   padding: 7px 9px;
   border-radius: 8px;
   background: #e2e8f0;
@@ -82,6 +92,7 @@
   font-size: 1rem;
   font-weight: 800;
   line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 
 .customer-status-card small {
@@ -140,7 +151,4 @@
     grid-template-columns: 1fr;
   }
 
-  .customer-status-card {
-    min-height: 170px;
-  }
 }

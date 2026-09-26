@@ -588,6 +588,58 @@ function applyStatusValidation_(sheet, startRow, rows) {
   sheet.getRange(startRow, 8, Math.max(rows, 1), 1).setDataValidation(rule);
 }
 
+function cleanupStaleSnackOrdersFormatting() {
+  const sheet = getSpreadsheet_().getSheetByName(CONFIG.ORDERS_SHEET);
+  if (!sheet) return { ok: false, error: 'orders_sheet_missing' };
+
+  const staleRules = sheet.getConditionalFormatRules().filter(function (rule) {
+    return rule.getRanges().some(function (range) {
+      const startCol = range.getColumn();
+      const endCol = startCol + Math.max(range.getNumColumns() - 1, 0);
+      const isStatusColumnTarget = startCol <= 8 && endCol >= 8;
+      const isWholeRowTarget = startCol === 1 && range.getNumColumns() === CONFIG.HEADERS.length;
+      return isStatusColumnTarget || isWholeRowTarget;
+    });
+  });
+
+  const remainingRules = sheet.getConditionalFormatRules().filter(function (rule) {
+    return !staleRules.includes(rule);
+  });
+
+  sheet.setConditionalFormatRules(remainingRules);
+  sheet.getBandings().forEach(function (banding) { banding.remove(); });
+  applyStatusValidation_(sheet, 2, Math.max(sheet.getLastRow() - 1, 1));
+  applyAlternatingColors_(sheet, Math.max(sheet.getLastRow(), 1), CONFIG.HEADERS.length);
+  applyStatusColors_(sheet, 2);
+
+  return {
+    ok: true,
+    removedRules: staleRules.length,
+    remainingRules: remainingRules.length,
+    bandingsRemoved: true,
+    statusColumn: 8,
+  };
+}
+
+function restoreSnackOrdersStatusValidation() {
+  const sheet = getSpreadsheet_().getSheetByName(CONFIG.ORDERS_SHEET);
+  const lastDataRow = Math.max(sheet.getLastRow(), 2);
+  const targetRange = sheet.getRange(2, 8, lastDataRow - 1, 1);
+  const rule = SpreadsheetApp.newDataValidation()
+    .requireValueInList([
+      'pending_payment',
+      'payment_verified',
+      'preparing',
+      'ready_for_pickup',
+      'delivered',
+      'cancelled',
+    ], true)
+    .setAllowInvalid(false)
+    .build();
+
+  targetRange.setDataValidation(rule);
+}
+
 function applyStatusColors_(sheet, startRow) {
   const firstRow = startRow || 2;
   const rules = sheet.getConditionalFormatRules().filter(function (rule) {
